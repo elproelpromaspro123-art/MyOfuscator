@@ -170,5 +170,187 @@ return {
                 }
             },
         }
-    },
+    };
+    ["Maximum"] = {
+        -- Maximum security with all steps enabled
+        LuaVersion = "Lua51";
+        VarNamePrefix = "";
+        NameGenerator = "MangledShuffled";
+        PrettyPrint = false;
+        Seed = 0;
+        Steps = {
+            {
+                Name = "ControlFlowFlatten";
+                Settings = {};
+            },
+            {
+                Name = "OpaquePredicates";
+                Settings = {};
+            },
+            {
+                Name = "JunkCode";
+                Settings = {};
+            },
+            {
+                Name = "Vmify";
+                Settings = {};
+            },
+            {
+                Name = "EncryptStrings";
+                Settings = {};
+            },
+            {
+                Name = "StringToBytes";
+                Settings = {};
+            },
+            {
+                Name = "CallIndirection";
+                Settings = {};
+            },
+            {
+                Name = "AntiTamper";
+                Settings = {};
+            },
+            {
+                Name = "Vmify";
+                Settings = {};
+            },
+            {
+                Name = "ConstantArray";
+                Settings = {
+                    Treshold    = 1;
+                    StringsOnly = true;
+                    Shuffle     = true;
+                    Rotate      = true;
+                    LocalWrapperTreshold = 0;
+                }
+            },
+            {
+                Name = "NumbersToExpressions";
+                Settings = {};
+            },
+            {
+                Name = "ProxifyLocals";
+                Settings = {};
+            },
+            {
+                Name = "WrapInFunction";
+                Settings = {};
+            },
+        }
+    };
+    ["Performance"] = {
+        -- Fast obfuscation with minimal runtime overhead
+        LuaVersion = "Lua51";
+        VarNamePrefix = "";
+        NameGenerator = "MangledShuffled";
+        PrettyPrint = false;
+        Seed = 0;
+        Steps = {
+            {
+                Name = "EncryptStrings";
+                Settings = {};
+            },
+            {
+                Name = "ConstantArray";
+                Settings = {
+                    Treshold    = 1;
+                    StringsOnly = true;
+                    Shuffle     = true;
+                    Rotate      = false;
+                    LocalWrapperTreshold = 0;
+                }
+            },
+            {
+                Name = "WrapInFunction";
+                Settings = {};
+            },
+        }
+    };
+    ["LuaU"] = {
+        -- Roblox-optimized preset that avoids debug library
+        LuaVersion = "LuaU";
+        VarNamePrefix = "";
+        NameGenerator = "MangledShuffled";
+        PrettyPrint = false;
+        Seed = 0;
+        Steps = {
+            {
+                Name = "ControlFlowFlatten";
+                Settings = {};
+            },
+            {
+                Name = "OpaquePredicates";
+                Settings = {};
+            },
+            {
+                Name = "EncryptStrings";
+                Settings = {};
+            },
+            {
+                Name = "CallIndirection";
+                Settings = {};
+            },
+            {
+                Name = "AntiTamper";
+                Settings = {
+                    UseDebug = false;
+                };
+            },
+            {
+                Name = "ConstantArray";
+                Settings = {
+                    Treshold    = 1;
+                    StringsOnly = true;
+                    Shuffle     = true;
+                    Rotate      = true;
+                    LocalWrapperTreshold = 0;
+                }
+            },
+            {
+                Name = "NumbersToExpressions";
+                Settings = {};
+            },
+            {
+                Name = "ProxifyLocals";
+                Settings = {};
+            },
+            {
+                Name = "WrapInFunction";
+                Settings = {};
+            },
+        }
+    };
+    ["StringsOnly"] = {
+        -- Only string-related obfuscation
+        LuaVersion = "Lua51";
+        VarNamePrefix = "";
+        NameGenerator = "MangledShuffled";
+        PrettyPrint = false;
+        Seed = 0;
+        Steps = {
+            {
+                Name = "SplitStrings";
+                Settings = {};
+            },
+            {
+                Name = "EncryptStrings";
+                Settings = {};
+            },
+            {
+                Name = "StringToBytes";
+                Settings = {};
+            },
+            {
+                Name = "ConstantArray";
+                Settings = {
+                    Treshold    = 1;
+                    StringsOnly = true;
+                    Shuffle     = true;
+                    Rotate      = true;
+                    LocalWrapperTreshold = 0;
+                }
+            },
+        }
+    };
 }

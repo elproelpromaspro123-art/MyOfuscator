@@ -1,0 +1,213 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --neon-blue: #00ffff;
+  --neon-pink: #ff00ff;
+  --neon-green: #00ff00;
+  --bg-dark: #0a0a0f;
+  --bg-card: #111118;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 255, 255, 0.3) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--neon-blue), var(--neon-pink));
+  border-radius: 4px;
+}
+
+body {
+  background: var(--bg-dark);
+  color: white;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+.bg-grid {
+  background-image: 
+    linear-gradient(rgba(0, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 50px 50px;
+}
+
+.glow-box {
+  box-shadow: 
+    0 0 5px rgba(0, 255, 255, 0.2),
+    0 0 10px rgba(0, 255, 255, 0.1),
+    inset 0 0 20px rgba(0, 255, 255, 0.05);
+}
+
+.glow-text {
+  text-shadow: 
+    0 0 10px rgba(0, 255, 255, 0.8),
+    0 0 20px rgba(0, 255, 255, 0.5),
+    0 0 30px rgba(0, 255, 255, 0.3);
+}
+
+.glow-text-pink {
+  text-shadow: 
+    0 0 10px rgba(255, 0, 255, 0.8),
+    0 0 20px rgba(255, 0, 255, 0.5),
+    0 0 30px rgba(255, 0, 255, 0.3);
+}
+
+.btn-cyber {
+  @apply relative overflow-hidden px-6 py-3 font-bold uppercase tracking-wider;
+  @apply bg-gradient-to-r from-cyan-500 to-blue-600;
+  @apply border border-cyan-400/50;
+  @apply transition-all duration-300;
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+}
+
+.btn-cyber:hover {
+  @apply from-cyan-400 to-blue-500;
+  box-shadow: 
+    0 0 20px rgba(0, 255, 255, 0.5),
+    0 0 40px rgba(0, 255, 255, 0.3);
+}
+
+.btn-cyber:disabled {
+  @apply opacity-50 cursor-not-allowed;
+}
+
+.btn-cyber::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s;
+}
+
+.btn-cyber:hover::before {
+  left: 100%;
+}
+
+.card-cyber {
+  @apply relative bg-gray-900/80 backdrop-blur-sm;
+  @apply border border-cyan-500/30;
+  clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px));
+}
+
+.card-cyber::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--neon-blue), transparent);
+}
+
+.input-cyber {
+  @apply w-full px-4 py-3 bg-gray-900/80 backdrop-blur-sm;
+  @apply border border-cyan-500/30;
+  @apply text-white placeholder-gray-500;
+  @apply focus:outline-none focus:border-cyan-400;
+  @apply transition-all duration-300;
+}
+
+.input-cyber:focus {
+  box-shadow: 
+    0 0 10px rgba(0, 255, 255, 0.3),
+    inset 0 0 10px rgba(0, 255, 255, 0.05);
+}
+
+.select-cyber {
+  @apply w-full px-4 py-3 bg-gray-900/80 backdrop-blur-sm;
+  @apply border border-cyan-500/30;
+  @apply text-white;
+  @apply focus:outline-none focus:border-cyan-400;
+  @apply transition-all duration-300;
+  @apply cursor-pointer appearance-none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2300ffff'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 20px;
+}
+
+.editor-container {
+  @apply relative rounded-lg overflow-hidden;
+  @apply border border-cyan-500/30;
+  box-shadow: 
+    0 0 20px rgba(0, 255, 255, 0.1),
+    inset 0 0 40px rgba(0, 0, 0, 0.5);
+}
+
+.stats-card {
+  @apply p-4 bg-gray-900/60 backdrop-blur-sm;
+  @apply border border-cyan-500/20 rounded-lg;
+  @apply text-center;
+}
+
+.stats-value {
+  @apply text-2xl font-bold text-cyan-400;
+  text-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+}
+
+.stats-label {
+  @apply text-sm text-gray-400 uppercase tracking-wider;
+}
+
+@keyframes scan {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}
+
+.scanline {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--neon-blue), transparent);
+  animation: scan 8s linear infinite;
+  pointer-events: none;
+  opacity: 0.3;
+  z-index: 9999;
+}
+
+.floating {
+  animation: float 6s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% { 
+    box-shadow: 0 0 5px rgba(0, 255, 255, 0.5), 0 0 10px rgba(0, 255, 255, 0.3);
+  }
+  50% { 
+    box-shadow: 0 0 20px rgba(0, 255, 255, 0.8), 0 0 40px rgba(0, 255, 255, 0.5);
+  }
+}
+
+.monaco-editor {
+  background-color: transparent !important;
+}
+
+.monaco-editor .margin {
+  background-color: transparent !important;
+}

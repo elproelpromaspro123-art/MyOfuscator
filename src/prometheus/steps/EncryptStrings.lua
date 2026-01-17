@@ -27,10 +27,11 @@ function EncryptStrings:init(settings) end
 function EncryptStrings:CreateEncrypionService()
 	local usedSeeds = {};
 
-	local secret_key_6 = math.random(0, 63) -- 6-bit  arbitrary integer (0..63)
-	local secret_key_7 = math.random(0, 127) -- 7-bit  arbitrary integer (0..127)
-	local secret_key_44 = math.random(0, 17592186044415) -- 44-bit arbitrary integer (0..17592186044415)
-	local secret_key_8 = math.random(0, 255); -- 8-bit  arbitrary integer (0..255)
+	local secret_key_6 = math.random(0, 63)
+	local secret_key_7 = math.random(0, 127)
+	local secret_key_44 = math.random(0, 17592186044415)
+	local secret_key_8 = math.random(0, 255);
+	local xor_key = math.random(1, 255);
 
 	local floor = math.floor
 
@@ -40,6 +41,22 @@ function EncryptStrings:CreateEncrypionService()
 			g, m, d = g * g * (d >= m and 3 or 1) % 257, m / 2, d % m
 		until m < 1
 		return g
+	end
+
+	local function bitxor(a, b)
+		local result = 0
+		local bit = 1
+		while a > 0 or b > 0 do
+			local a_bit = a % 2
+			local b_bit = b % 2
+			if a_bit ~= b_bit then
+				result = result + bit
+			end
+			a = floor(a / 2)
+			b = floor(b / 2)
+			bit = bit * 2
+		end
+		return result
 	end
 
 	local param_mul_8 = primitive_root_257(secret_key_7)
@@ -77,7 +94,7 @@ function EncryptStrings:CreateEncrypionService()
 
 	local function get_next_pseudo_random_byte()
 		if #prev_values == 0 then
-			local rnd = get_random_32() -- value 0..4294967295
+			local rnd = get_random_32()
 			local low_16 = rnd % 65536
 			local high_16 = (rnd - low_16) / 65536
 			local b1 = low_16 % 256
@@ -86,7 +103,6 @@ function EncryptStrings:CreateEncrypionService()
 			local b4 = (high_16 - b3) / 256
 			prev_values = { b1, b2, b3, b4 }
 		end
-		--print(unpack(prev_values))
 		return table.remove(prev_values)
 	end
 
@@ -98,42 +114,54 @@ function EncryptStrings:CreateEncrypionService()
 		local prevVal = secret_key_8;
 		for i = 1, len do
 			local byte = string.byte(str, i);
-			out[i] = string.char((byte - (get_next_pseudo_random_byte() + prevVal)) % 256);
-			prevVal = byte;
+			local xored = bitxor(byte, xor_key)
+			out[i] = string.char((xored - (get_next_pseudo_random_byte() + prevVal)) % 256);
+			prevVal = xored;
 		end
 		return table.concat(out), seed;
+	end
+
+	local function genOpaqueNumber(n)
+		local a = math.random(100, 9999)
+		local b = math.random(100, 9999)
+		local c = n - a * b
+		return string.format("(%d*%d+%d)", a, b, c)
 	end
 
     local function genCode()
         local code = [[
 do
 	local floor = math.floor
-	local random = math.random;
 	local remove = table.remove;
 	local char = string.char;
+	local byte = string.byte;
+	local len = string.len;
+	local concat = table.concat;
 	local state_45 = 0
 	local state_8 = 2
-	local digits = {}
-	local charmap = {};
-	local i = 0;
 
-	local nums = {};
-	for i = 1, 256 do
-		nums[i] = i;
+	local function bitxor(a, b)
+		local result = 0
+		local bit = 1
+		while a > 0 or b > 0 do
+			local a_bit = a % 2
+			local b_bit = b % 2
+			if a_bit ~= b_bit then
+				result = result + bit
+			end
+			a = floor(a / 2)
+			b = floor(b / 2)
+			bit = bit * 2
+		end
+		return result
 	end
-
-	repeat
-		local idx = random(1, #nums);
-		local n = remove(nums, idx);
-		charmap[n] = char(n - 1);
-	until #nums == 0;
 
 	local prev_values = {}
 	local function get_next_pseudo_random_byte()
 		if #prev_values == 0 then
-			state_45 = (state_45 * ]] .. tostring(param_mul_45) .. [[ + ]] .. tostring(param_add_45) .. [[) % 35184372088832
+			state_45 = (state_45 * ]] .. genOpaqueNumber(param_mul_45) .. [[ + ]] .. genOpaqueNumber(param_add_45) .. [[) % 35184372088832
 			repeat
-				state_8 = state_8 * ]] .. tostring(param_mul_8) .. [[ % 257
+				state_8 = state_8 * ]] .. genOpaqueNumber(param_mul_8) .. [[ % 257
 			until state_8 ~= 1
 			local r = state_8 % 32
 			local n = floor(state_45 / 2 ^ (13 - (state_8 - r) / 32)) % 2 ^ 32 / 2 ^ r
@@ -146,7 +174,7 @@ do
 			local b4 = (high_16 - b3) / 256
 			prev_values = { b1, b2, b3, b4 }
 		end
-		return table.remove(prev_values)
+		return remove(prev_values)
 	end
 
 	local realStrings = {};
@@ -158,16 +186,17 @@ do
 		local realStringsLocal = realStrings;
 		if(realStringsLocal[seed]) then else
 			prev_values = {};
-			local chars = charmap;
 			state_45 = seed % 35184372088832
 			state_8 = seed % 255 + 2
-			local len = string.len(str);
-			realStringsLocal[seed] = "";
-			local prevVal = ]] .. tostring(secret_key_8) .. [[;
-			for i=1, len do
-				prevVal = (string.byte(str, i) + get_next_pseudo_random_byte() + prevVal) % 256
-				realStringsLocal[seed] = realStringsLocal[seed] .. chars[prevVal + 1];
+			local slen = len(str);
+			local buf = {};
+			local prevVal = ]] .. genOpaqueNumber(secret_key_8) .. [[;
+			local xorKey = ]] .. genOpaqueNumber(xor_key) .. [[;
+			for i=1, slen do
+				prevVal = (byte(str, i) + get_next_pseudo_random_byte() + prevVal) % 256
+				buf[i] = char(bitxor(prevVal, xorKey));
 			end
+			realStringsLocal[seed] = concat(buf);
 		end
 		return seed;
 	end
