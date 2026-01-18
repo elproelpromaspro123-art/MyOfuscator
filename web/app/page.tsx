@@ -23,8 +23,8 @@ local function greet(name)
     print("Hello, " .. name .. "!")
 end
 
-local secret = "my_secret_key_123"
-local apiKey = "sk-1234567890abcdef"
+local message = "This is a secret message"
+local password = "super_secure_password_123"
 
 for i = 1, 10 do
     greet("User " .. tostring(i))
@@ -114,7 +114,6 @@ export default function Home() {
       <Header />
       
       <main className="container mx-auto px-4 py-8 max-w-7xl">
-        {/* Hero Section */}
         <motion.section 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -130,9 +129,7 @@ export default function Home() {
           </p>
         </motion.section>
 
-        {/* Main Content */}
         <div className="grid lg:grid-cols-4 gap-6">
-          {/* Settings Panel */}
           <motion.div
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
@@ -142,14 +139,12 @@ export default function Home() {
             <SettingsPanel settings={settings} onChange={setSettings} />
           </motion.div>
 
-          {/* Code Editors */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
             className="lg:col-span-3 space-y-6"
           >
-            {/* Input Editor */}
             <div className="card-cyber p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-bold text-cyan-400 flex items-center gap-2">
@@ -170,7 +165,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Obfuscate Button */}
             <div className="flex justify-center">
               <motion.button
                 whileHover={{ scale: 1.02 }}
@@ -198,7 +192,6 @@ export default function Home() {
               </motion.button>
             </div>
 
-            {/* Error Message */}
             <AnimatePresence>
               {error && (
                 <motion.div
@@ -217,7 +210,6 @@ export default function Home() {
               )}
             </AnimatePresence>
 
-            {/* Stats Panel */}
             <AnimatePresence>
               {outputCode && (
                 <motion.div
@@ -230,7 +222,6 @@ export default function Home() {
               )}
             </AnimatePresence>
 
-            {/* Output Editor */}
             <AnimatePresence>
               {outputCode && (
                 <motion.div
@@ -281,7 +272,6 @@ export default function Home() {
           </motion.div>
         </div>
 
-        {/* Features Section */}
         <motion.section
           initial={{ opacity: 0, y: 40 }}
           animate={{ opacity: 1, y: 0 }}
@@ -294,26 +284,10 @@ export default function Home() {
           </h2>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
-              {
-                icon: '🔐',
-                title: 'Custom VM',
-                description: 'Compiles to custom bytecode with randomized opcodes'
-              },
-              {
-                icon: '🔒',
-                title: 'String Encryption',
-                description: 'Multi-layer encryption with per-string unique keys'
-              },
-              {
-                icon: '🌀',
-                title: 'Control Flow',
-                description: 'Flattens control flow into state machines'
-              },
-              {
-                icon: '🛡️',
-                title: 'Anti-Tamper',
-                description: 'Detects and corrupts execution if modified'
-              },
+              { icon: '🔐', title: 'Custom VM', description: 'Compiles to custom bytecode with randomized opcodes' },
+              { icon: '🔒', title: 'String Encryption', description: 'Multi-layer encryption with per-string unique keys' },
+              { icon: '🌀', title: 'Control Flow', description: 'Flattens control flow into state machines' },
+              { icon: '🛡️', title: 'Anti-Tamper', description: 'Detects and corrupts execution if modified' },
             ].map((feature, index) => (
               <motion.div
                 key={feature.title}

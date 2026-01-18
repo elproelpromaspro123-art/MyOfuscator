@@ -1,93 +1,115 @@
-# Prometheus Obfuscator Web
+# 🔥 Prometheus Obfuscator Web
 
-A modern web interface for the Prometheus Lua Obfuscator.
+A beautiful cyberpunk-themed web interface for the Prometheus Lua Obfuscator.
 
-## Features
+![Prometheus Web Interface](https://img.shields.io/badge/Next.js-14.2-black?logo=nextdotjs)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.4-blue?logo=typescript)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind-3.4-38B2AC?logo=tailwindcss)
 
-- 🎨 Beautiful cyberpunk-themed UI
-- 📝 Monaco code editor with Lua syntax highlighting
-- ⚙️ Configurable obfuscation settings
-- 📊 Real-time statistics
-- 📱 Fully responsive design
-- 🚀 Ready for Vercel deployment
+## ✨ Features
 
-## Tech Stack
+- 🎨 **Cyberpunk UI** - Beautiful neon-themed design with animations
+- 📝 **Monaco Editor** - Full-featured code editor with Lua syntax highlighting
+- ⚙️ **Configurable** - All obfuscation steps can be toggled individually
+- 📊 **Statistics** - Real-time stats showing size changes and processing time
+- 📱 **Responsive** - Works on desktop and mobile devices
+- 🚀 **Fast** - Instant client-side obfuscation
 
-- **Next.js 14** - React framework
+## 🛠️ Tech Stack
+
+- **Next.js 14** - React framework with App Router
 - **TypeScript** - Type safety
-- **Tailwind CSS** - Styling
-- **Framer Motion** - Animations
-- **Monaco Editor** - Code editing
+- **Tailwind CSS** - Utility-first styling
+- **Framer Motion** - Smooth animations
+- **Monaco Editor** - VS Code's editor
 
-## Getting Started
-
-### Prerequisites
-
-- Node.js 18+
-- npm or pnpm
-
-### Installation
-
-```bash
-cd web
-npm install
-```
+## 🚀 Quick Start
 
 ### Development
 
 ```bash
+npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open [http://localhost:3000](http://localhost:3000)
 
-### Build
+### Production Build
 
 ```bash
 npm run build
+npm start
 ```
 
-## Deployment to Vercel
+## 🌐 Deploy to Vercel
 
-### Option 1: Vercel CLI
+### Option 1: One-Click Deploy
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/YOUR_USERNAME/Prometheus&root-directory=web)
+
+### Option 2: Manual Deploy
+
+1. Push your code to GitHub
+2. Go to [vercel.com](https://vercel.com)
+3. Import your repository
+4. **Important:** Set Root Directory to `web`
+5. Click Deploy!
+
+### Option 3: Vercel CLI
 
 ```bash
 npm i -g vercel
+cd web
 vercel
 ```
 
-### Option 2: GitHub Integration
-
-1. Push this repository to GitHub
-2. Go to [vercel.com](https://vercel.com)
-3. Import the repository
-4. Set the root directory to `web`
-5. Deploy!
-
-## Available Presets
+## 📋 Available Presets
 
 | Preset | Description |
 |--------|-------------|
 | Minify | Just minification, no obfuscation |
 | Weak | Light obfuscation |
-| Medium | Balanced protection |
+| Medium | Balanced protection (default) |
 | Strong | Strong protection with VM |
 | Maximum | Maximum security with all steps |
 | Performance | Fast execution, minimal overhead |
 | LuaU/Roblox | Optimized for Roblox environment |
 
-## Obfuscation Steps
+## 🔧 Obfuscation Steps
 
-- **Encrypt Strings** - Multi-layer string encryption
-- **Custom VM** - Compiles to custom bytecode
-- **Anti-Tamper** - Detects code modifications
-- **Control Flow Flatten** - Converts to state machine
-- **Opaque Predicates** - Complex always-true conditions
-- **Junk Code** - Dead code insertion
-- **Constant Array** - Moves constants to array
-- **Numbers → Expressions** - Replaces numbers with math
-- **Wrap In Function** - Wraps code in closure
+| Step | Description |
+|------|-------------|
+| Encrypt Strings | Multi-layer XOR encryption for strings |
+| Custom VM | Compiles to custom bytecode |
+| Anti-Tamper | Detects code modifications |
+| Control Flow Flatten | Transforms to state machines |
+| Opaque Predicates | Adds complex always-true conditions |
+| Junk Code | Inserts dead code |
+| Constant Array | Pools constants together |
+| Numbers → Expressions | Replaces numbers with math |
+| Wrap In Function | Wraps code in closure |
 
-## License
+## 📁 Project Structure
+
+```
+web/
+├── app/
+│   ├── globals.css      # Global styles
+│   ├── layout.tsx       # Root layout
+│   └── page.tsx         # Main page
+├── components/
+│   ├── CodeEditor.tsx   # Monaco editor wrapper
+│   ├── Footer.tsx       # Page footer
+│   ├── Header.tsx       # Page header
+│   ├── SettingsPanel.tsx # Obfuscation settings
+│   └── StatsPanel.tsx   # Statistics display
+├── lib/
+│   └── obfuscator.ts    # Client-side obfuscation
+├── public/
+│   └── favicon.svg      # Site icon
+└── ...config files
+```
+
+## 📄 License
 
 GNU AGPL v3 - See [LICENSE](../LICENSE)

@@ -1,8 +1,7 @@
 'use client'
 
-import Editor, { OnMount } from '@monaco-editor/react'
-import { useCallback, useRef } from 'react'
-import type { editor } from 'monaco-editor'
+import Editor, { OnMount, Monaco } from '@monaco-editor/react'
+import { useCallback } from 'react'
 
 interface CodeEditorProps {
   value: string
@@ -19,12 +18,8 @@ export default function CodeEditor({
   height = '400px',
   readOnly = false 
 }: CodeEditorProps) {
-  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
 
-  const handleMount: OnMount = useCallback((editor, monaco) => {
-    editorRef.current = editor
-
-    // Define custom Lua theme
+  const handleMount: OnMount = useCallback((editor, monaco: Monaco) => {
     monaco.editor.defineTheme('prometheus-dark', {
       base: 'vs-dark',
       inherit: true,
@@ -56,7 +51,6 @@ export default function CodeEditor({
 
     monaco.editor.setTheme('prometheus-dark')
 
-    // Configure Lua language
     monaco.languages.setMonarchTokensProvider('lua', {
       defaultToken: '',
       tokenPostfix: '.lua',

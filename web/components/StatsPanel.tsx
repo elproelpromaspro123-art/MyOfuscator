@@ -22,56 +22,62 @@ export default function StatsPanel({ stats }: StatsPanelProps) {
     return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
   }
 
-  const statsItems = [
-    {
-      label: 'Original Size',
-      value: formatBytes(stats.originalSize),
-      icon: '📄',
-      color: 'cyan',
-    },
-    {
-      label: 'Obfuscated Size',
-      value: formatBytes(stats.obfuscatedSize),
-      icon: '🔐',
-      color: 'pink',
-    },
-    {
-      label: 'Size Ratio',
-      value: `${sizeIncrease}%`,
-      icon: '📊',
-      color: 'yellow',
-    },
-    {
-      label: 'Processing Time',
-      value: `${stats.processingTime}ms`,
-      icon: '⚡',
-      color: 'green',
-    },
-    {
-      label: 'Steps Applied',
-      value: stats.stepsApplied.toString(),
-      icon: '🔧',
-      color: 'purple',
-    },
-  ]
-
   return (
     <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-      {statsItems.map((item, index) => (
-        <motion.div
-          key={item.label}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: index * 0.1 }}
-          className="stats-card"
-        >
-          <div className="text-2xl mb-2">{item.icon}</div>
-          <div className={`stats-value text-${item.color}-400`}>
-            {item.value}
-          </div>
-          <div className="stats-label">{item.label}</div>
-        </motion.div>
-      ))}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0 }}
+        className="stats-card"
+      >
+        <div className="text-2xl mb-2">📄</div>
+        <div className="stats-value text-cyan-400">{formatBytes(stats.originalSize)}</div>
+        <div className="stats-label">Original Size</div>
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+        className="stats-card"
+      >
+        <div className="text-2xl mb-2">🔐</div>
+        <div className="stats-value text-pink-400">{formatBytes(stats.obfuscatedSize)}</div>
+        <div className="stats-label">Obfuscated Size</div>
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+        className="stats-card"
+      >
+        <div className="text-2xl mb-2">📊</div>
+        <div className="stats-value text-yellow-400">{sizeIncrease}%</div>
+        <div className="stats-label">Size Ratio</div>
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3 }}
+        className="stats-card"
+      >
+        <div className="text-2xl mb-2">⚡</div>
+        <div className="stats-value text-green-400">{stats.processingTime}ms</div>
+        <div className="stats-label">Processing Time</div>
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4 }}
+        className="stats-card"
+      >
+        <div className="text-2xl mb-2">🔧</div>
+        <div className="stats-value text-purple-400">{stats.stepsApplied}</div>
+        <div className="stats-label">Steps Applied</div>
+      </motion.div>
     </div>
   )
 }
