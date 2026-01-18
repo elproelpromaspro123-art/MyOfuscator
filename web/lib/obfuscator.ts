@@ -1,18 +1,5 @@
 export interface ObfuscationSettings {
-  preset: string
-  luaVersion: string
-  nameGenerator: string
-  steps: {
-    encryptStrings: boolean
-    vmify: boolean
-    antiTamper: boolean
-    controlFlowFlatten: boolean
-    opaquePredicates: boolean
-    junkCode: boolean
-    constantArray: boolean
-    numbersToExpressions: boolean
-    wrapInFunction: boolean
-  }
+  preset: 'Low' | 'Medium' | 'High' | 'Maximum'
 }
 
 export interface ObfuscationResult {
@@ -20,165 +7,80 @@ export interface ObfuscationResult {
   stepsApplied: number
 }
 
-function simpleEncrypt(str: string): string {
-  const key = Math.floor(Math.random() * 255)
-  const bytes = []
+function xorEncrypt(str: string, key: number): number[] {
+  const bytes: number[] = []
   for (let i = 0; i < str.length; i++) {
     bytes.push(str.charCodeAt(i) ^ key)
   }
-  return `(function()local k=${key};local t={${bytes.join(',')}};local s="";for i=1,#t do s=s..string.char(t[i]~k)end;return s end)()`
+  return bytes
 }
 
-function randomVarName(generator: string): string {
-  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_'
-  const confuseChars = 'lI1iOo0'
-  let name = ''
-  const length = Math.floor(Math.random() * 8) + 4
-  
-  if (generator === 'Il' || generator === 'Homoglyph') {
-    for (let i = 0; i < length; i++) {
-      name += confuseChars[Math.floor(Math.random() * confuseChars.length)]
-    }
-    name = 'l' + name
-  } else if (generator === 'Number') {
-    name = '_' + Math.floor(Math.random() * 1000000).toString()
-  } else if (generator === 'Minimal') {
-    const minChars = 'abcdefghijklmnopqrstuvwxyz'
-    name = minChars[Math.floor(Math.random() * 26)]
-    if (Math.random() > 0.5) {
-      name += minChars[Math.floor(Math.random() * 26)]
-    }
-  } else {
-    for (let i = 0; i < length; i++) {
-      name += chars[Math.floor(Math.random() * chars.length)]
-    }
+function randomVar(): string {
+  const chars = 'lI1'
+  let name = 'l'
+  const len = 6 + Math.floor(Math.random() * 6)
+  for (let i = 0; i < len; i++) {
+    name += chars[Math.floor(Math.random() * chars.length)]
   }
-  
   return name
 }
 
-function generateOpaquePredicate(): string {
-  const predicates = [
-    '((1+1)==2)',
-    '((0*0)==0)',
-    '(type("")=="string")',
-    '(type(1)=="number")',
-    '(true and true)',
-    '(not false)',
-    '((#"")==0)',
-    '(1<2)',
-    '(math.abs(-1)==1)',
-    '((2^2)==4)',
-  ]
-  return predicates[Math.floor(Math.random() * predicates.length)]
+function encryptStrings(code: string): string {
+  const stringRegex = /"([^"\\]|\\.)*"|'([^'\\]|\\.)*'/g
+  return code.replace(stringRegex, (match) => {
+    const content = match.slice(1, -1)
+    if (content.length < 2) return match
+    const key = Math.floor(Math.random() * 200) + 50
+    const bytes = xorEncrypt(content, key)
+    return `(function()local k=${key} local t={${bytes.join(',')}} local s="" for i=1,#t do s=s..string.char(t[i]~k)end return s end)()`
+  })
 }
 
-function generateJunkCode(): string {
-  const junkPatterns = [
-    () => `local ${randomVarName('Mangled')}=${Math.floor(Math.random() * 1000)};`,
-    () => `local ${randomVarName('Mangled')}="${randomVarName('Mangled')}";`,
-    () => `if false then local ${randomVarName('Mangled')}=nil end;`,
-    () => `do local ${randomVarName('Mangled')}={} end;`,
-    () => `(function()end)();`,
-  ]
-  return junkPatterns[Math.floor(Math.random() * junkPatterns.length)]()
+function wrapInFunction(code: string): string {
+  const v = randomVar()
+  return `local ${v}=function()${code} end return ${v}()`
 }
 
-function numberToExpression(num: number): string {
-  const a = Math.floor(Math.random() * 100) + 1
-  const b = num + a
-  const expressions = [
-    `(${b}-${a})`,
-    `(${num * 2}/2)`,
-    `(${num + 10}-10)`,
-    `(math.floor(${num}.0))`,
-    `(${a}+${num - a})`,
-  ]
-  return expressions[Math.floor(Math.random() * expressions.length)]
+function addAntiTamper(code: string): string {
+  const v1 = randomVar()
+  const v2 = randomVar()
+  return `local ${v1}=type local ${v2}=${v1}(pcall)=="function"and ${v1}(error)=="function"and ${v1}(tostring)=="function" if not ${v2} then return end ${code}`
 }
 
-export async function obfuscateCode(
-  code: string, 
-  settings: ObfuscationSettings
-): Promise<ObfuscationResult> {
-  await new Promise(resolve => setTimeout(resolve, 300 + Math.random() * 700))
-  
-  let result = code
-  let stepsApplied = 0
-
-  if (settings.steps.encryptStrings) {
-    const stringRegex = /"([^"\\]|\\.)*"|'([^'\\]|\\.)*'/g
-    result = result.replace(stringRegex, (match) => {
-      const content = match.slice(1, -1)
-      if (content.length < 2) return match
-      return simpleEncrypt(content)
-    })
-    stepsApplied++
-  }
-
-  if (settings.steps.controlFlowFlatten) {
-    const funcVar = randomVarName(settings.nameGenerator)
-    result = `local ${funcVar}=function()${result} end;${funcVar}()`
-    stepsApplied++
-  }
-
-  if (settings.steps.opaquePredicates) {
-    const predicate = generateOpaquePredicate()
-    result = `if ${predicate} then ${result} end`
-    stepsApplied++
-  }
-
-  if (settings.steps.junkCode) {
-    const junkBefore = Array.from({ length: 3 }, () => generateJunkCode()).join('')
-    const junkAfter = Array.from({ length: 3 }, () => generateJunkCode()).join('')
-    result = junkBefore + result + junkAfter
-    stepsApplied++
-  }
-
-  if (settings.steps.numbersToExpressions) {
-    result = result.replace(/\b(\d+)\b/g, (match) => {
-      const num = parseInt(match, 10)
-      if (num > 0 && num < 10000 && Math.random() > 0.5) {
-        return numberToExpression(num)
-      }
-      return match
-    })
-    stepsApplied++
-  }
-
-  if (settings.steps.constantArray) {
-    stepsApplied++
-  }
-
-  if (settings.steps.antiTamper) {
-    const checkVar = randomVarName(settings.nameGenerator)
-    result = `local ${checkVar}=type(pcall)=="function"and type(error)=="function";if not ${checkVar} then return end;${result}`
-    stepsApplied++
-  }
-
-  if (settings.steps.vmify) {
-    const funcVar = randomVarName(settings.nameGenerator)
-    const xorKey = Math.floor(Math.random() * 200) + 50
-    const bytes: number[] = []
-    for (let i = 0; i < result.length; i++) {
-      bytes.push(result.charCodeAt(i) ^ xorKey)
+function obfuscateNumbers(code: string): string {
+  return code.replace(/\b(\d+)\b/g, (match) => {
+    const num = parseInt(match, 10)
+    if (num >= 0 && num < 10000 && Math.random() > 0.4) {
+      const a = Math.floor(Math.random() * 50) + 1
+      return `(${num + a}-${a})`
     }
-    result = `local ${funcVar}=(function()local k=${xorKey};local d={${bytes.join(',')}};local s="";for i=1,#d do s=s..string.char(d[i]~k)end;return(loadstring or load)(s)end)();return ${funcVar}()`
-    stepsApplied++
-  }
+    return match
+  })
+}
 
-  if (settings.steps.wrapInFunction) {
-    const funcVar = randomVarName(settings.nameGenerator)
-    result = `local ${funcVar}=function()${result} end;return ${funcVar}()`
-    stepsApplied++
+function addJunkCode(code: string): string {
+  const junks: string[] = []
+  for (let i = 0; i < 3; i++) {
+    const v = randomVar()
+    const patterns = [
+      `local ${v}=${Math.floor(Math.random() * 999)}`,
+      `local ${v}=function()end`,
+      `if false then local ${v}=nil end`,
+    ]
+    junks.push(patterns[Math.floor(Math.random() * patterns.length)])
   }
+  return junks.join(' ') + ' ' + code
+}
 
-  result = minifyLua(result)
-
-  return {
-    code: result,
-    stepsApplied,
-  }
+function addOpaquePredicates(code: string): string {
+  const predicates = [
+    '(1+1==2)',
+    '(type("")=="string")',
+    '(not false)',
+    '(true and true)',
+  ]
+  const pred = predicates[Math.floor(Math.random() * predicates.length)]
+  return `if ${pred} then ${code} end`
 }
 
 function minifyLua(code: string): string {
@@ -188,11 +90,11 @@ function minifyLua(code: string): string {
   let stringChar = ''
   let inLongString = false
   let longStringLevel = 0
-  
+
   while (i < code.length) {
     const char = code[i]
     const next = code[i + 1] || ''
-    
+
     if (inLongString) {
       result += char
       if (char === ']') {
@@ -208,7 +110,7 @@ function minifyLua(code: string): string {
       i++
       continue
     }
-    
+
     if (inString) {
       result += char
       if (char === '\\') {
@@ -222,7 +124,7 @@ function minifyLua(code: string): string {
       i++
       continue
     }
-    
+
     if (char === '"' || char === "'") {
       inString = true
       stringChar = char
@@ -230,7 +132,7 @@ function minifyLua(code: string): string {
       i++
       continue
     }
-    
+
     if (char === '[' && (next === '[' || next === '=')) {
       let level = 0
       let j = i + 1
@@ -243,7 +145,7 @@ function minifyLua(code: string): string {
         continue
       }
     }
-    
+
     if (char === '-' && next === '-') {
       let j = i + 2
       if (code[j] === '[') {
@@ -271,22 +173,83 @@ function minifyLua(code: string): string {
       i = j
       continue
     }
-    
+
     if (/\s/.test(char)) {
       const prevChar = result[result.length - 1] || ''
       let j = i
       while (j < code.length && /\s/.test(code[j])) j++
       const nextChar = code[j] || ''
-      
       const needsSpace = /[a-zA-Z0-9_]/.test(prevChar) && /[a-zA-Z0-9_]/.test(nextChar)
       if (needsSpace) result += ' '
       i = j
       continue
     }
-    
+
     result += char
     i++
   }
-  
+
   return result.trim()
+}
+
+export async function obfuscateCode(
+  code: string,
+  settings: ObfuscationSettings
+): Promise<ObfuscationResult> {
+  await new Promise(resolve => setTimeout(resolve, 200 + Math.random() * 300))
+
+  let result = code
+  let stepsApplied = 0
+
+  if (settings.preset === 'Low') {
+    result = encryptStrings(result)
+    stepsApplied++
+    result = wrapInFunction(result)
+    stepsApplied++
+  } else if (settings.preset === 'Medium') {
+    result = encryptStrings(result)
+    stepsApplied++
+    result = obfuscateNumbers(result)
+    stepsApplied++
+    result = addAntiTamper(result)
+    stepsApplied++
+    result = wrapInFunction(result)
+    stepsApplied++
+  } else if (settings.preset === 'High') {
+    result = encryptStrings(result)
+    stepsApplied++
+    result = obfuscateNumbers(result)
+    stepsApplied++
+    result = addJunkCode(result)
+    stepsApplied++
+    result = addAntiTamper(result)
+    stepsApplied++
+    result = addOpaquePredicates(result)
+    stepsApplied++
+    result = wrapInFunction(result)
+    stepsApplied++
+  } else if (settings.preset === 'Maximum') {
+    result = encryptStrings(result)
+    stepsApplied++
+    result = obfuscateNumbers(result)
+    stepsApplied++
+    result = addJunkCode(result)
+    stepsApplied++
+    result = addAntiTamper(result)
+    stepsApplied++
+    result = addOpaquePredicates(result)
+    stepsApplied++
+    result = wrapInFunction(result)
+    stepsApplied++
+    const v = randomVar()
+    result = `local ${v}=function()${result} end return ${v}()`
+    stepsApplied++
+  }
+
+  result = minifyLua(result)
+
+  return {
+    code: result,
+    stepsApplied,
+  }
 }

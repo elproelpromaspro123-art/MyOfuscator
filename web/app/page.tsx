@@ -48,19 +48,6 @@ export default function Home() {
   })
   const [settings, setSettings] = useState<ObfuscationSettings>({
     preset: 'Medium',
-    luaVersion: 'Lua51',
-    nameGenerator: 'MangledShuffled',
-    steps: {
-      encryptStrings: true,
-      vmify: true,
-      antiTamper: false,
-      controlFlowFlatten: false,
-      opaquePredicates: false,
-      junkCode: false,
-      constantArray: true,
-      numbersToExpressions: true,
-      wrapInFunction: true,
-    }
   })
 
   const handleObfuscate = useCallback(async () => {
@@ -124,8 +111,8 @@ export default function Home() {
             <span className="glow-text-pink text-pink-500 ml-3">OBFUSCATOR</span>
           </h1>
           <p className="text-gray-400 text-lg max-w-2xl mx-auto">
-            Professional Lua code protection with custom VM, string encryption, 
-            control flow flattening, and advanced anti-tamper mechanisms.
+            Professional Lua code protection for Roblox with string encryption, 
+            anti-tamper, and advanced obfuscation techniques.
           </p>
         </motion.section>
 
@@ -284,10 +271,10 @@ export default function Home() {
           </h2>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
-              { icon: '🔐', title: 'Custom VM', description: 'Compiles to custom bytecode with randomized opcodes' },
-              { icon: '🔒', title: 'String Encryption', description: 'Multi-layer encryption with per-string unique keys' },
-              { icon: '🌀', title: 'Control Flow', description: 'Flattens control flow into state machines' },
-              { icon: '🛡️', title: 'Anti-Tamper', description: 'Detects and corrupts execution if modified' },
+              { icon: '🔒', title: 'String Encryption', description: 'XOR-based encryption with unique keys per string' },
+              { icon: '🛡️', title: 'Anti-Tamper', description: 'Environment validation to detect modifications' },
+              { icon: '🔢', title: 'Number Obfuscation', description: 'Converts numbers to computed expressions' },
+              { icon: '📝', title: 'Junk Code', description: 'Injects dead code to confuse analysis' },
             ].map((feature, index) => (
               <motion.div
                 key={feature.title}
