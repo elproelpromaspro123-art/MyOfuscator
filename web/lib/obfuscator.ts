@@ -20,13 +20,6 @@ export interface ObfuscationResult {
   stepsApplied: number
 }
 
-function toBase64(str: string): string {
-  if (typeof window !== 'undefined' && window.btoa) {
-    return window.btoa(unescape(encodeURIComponent(str)))
-  }
-  return Buffer.from(str).toString('base64')
-}
-
 function simpleEncrypt(str: string): string {
   const key = Math.floor(Math.random() * 255)
   const bytes = []
@@ -124,9 +117,8 @@ export async function obfuscateCode(
   }
 
   if (settings.steps.controlFlowFlatten) {
-    const stateVar = randomVarName(settings.nameGenerator)
-    const stateInit = Math.floor(Math.random() * 1000) + 1
-    result = `local ${stateVar}=${stateInit};while true do if ${stateVar}==${stateInit} then ${result};${stateVar}=0 elseif ${stateVar}==0 then break end end`
+    const funcVar = randomVarName(settings.nameGenerator)
+    result = `local ${funcVar}=function()${result} end;${funcVar}()`
     stepsApplied++
   }
 
@@ -165,13 +157,13 @@ export async function obfuscateCode(
   }
 
   if (settings.steps.vmify) {
-    const vmVar = randomVarName(settings.nameGenerator)
-    const dataVar = randomVarName(settings.nameGenerator)
-    const encoded = toBase64(result)
-    result = `-- Prometheus VM Protected
-local ${vmVar},${dataVar}=(function()local _ENV=_ENV or getfenv();return function(code)return assert(loadstring(code))()end end)(),[[${encoded}]];
-local function decode(s)local t={};for i=1,#s do local c=s:byte(i);if c>=65 and c<=90 then t[i]=string.char((c-65+26)%26+65)elseif c>=97 and c<=122 then t[i]=string.char((c-97+26)%26+97)else t[i]=string.char(c)end end;return table.concat(t)end;
-return ${vmVar}(decode(${dataVar}))`
+    const funcVar = randomVarName(settings.nameGenerator)
+    const xorKey = Math.floor(Math.random() * 200) + 50
+    const bytes: number[] = []
+    for (let i = 0; i < result.length; i++) {
+      bytes.push(result.charCodeAt(i) ^ xorKey)
+    }
+    result = `local ${funcVar}=(function()local k=${xorKey};local d={${bytes.join(',')}};local s="";for i=1,#d do s=s..string.char(d[i]~k)end;return(loadstring or load)(s)end)();return ${funcVar}()`
     stepsApplied++
   }
 
@@ -181,18 +173,120 @@ return ${vmVar}(decode(${dataVar}))`
     stepsApplied++
   }
 
-  result = result
-    .replace(/\s+/g, ' ')
-    .replace(/\s*([=+\-*/<>~,;{}()\[\]])\s*/g, '$1')
-    .replace(/\s*\.\.\s*/g, '..')
-    .trim()
-
-  result = `-- Obfuscated with Prometheus v2.0 Enhanced
--- https://github.com/prometheus-lua/Prometheus
-${result}`
+  result = minifyLua(result)
 
   return {
     code: result,
     stepsApplied,
   }
+}
+
+function minifyLua(code: string): string {
+  let result = ''
+  let i = 0
+  let inString = false
+  let stringChar = ''
+  let inLongString = false
+  let longStringLevel = 0
+  
+  while (i < code.length) {
+    const char = code[i]
+    const next = code[i + 1] || ''
+    
+    if (inLongString) {
+      result += char
+      if (char === ']') {
+        let level = 0
+        let j = i + 1
+        while (code[j] === '=') { level++; j++ }
+        if (code[j] === ']' && level === longStringLevel) {
+          result += code.slice(i + 1, j + 1)
+          i = j
+          inLongString = false
+        }
+      }
+      i++
+      continue
+    }
+    
+    if (inString) {
+      result += char
+      if (char === '\\') {
+        result += next
+        i += 2
+        continue
+      }
+      if (char === stringChar) {
+        inString = false
+      }
+      i++
+      continue
+    }
+    
+    if (char === '"' || char === "'") {
+      inString = true
+      stringChar = char
+      result += char
+      i++
+      continue
+    }
+    
+    if (char === '[' && (next === '[' || next === '=')) {
+      let level = 0
+      let j = i + 1
+      while (code[j] === '=') { level++; j++ }
+      if (code[j] === '[') {
+        inLongString = true
+        longStringLevel = level
+        result += code.slice(i, j + 1)
+        i = j + 1
+        continue
+      }
+    }
+    
+    if (char === '-' && next === '-') {
+      let j = i + 2
+      if (code[j] === '[') {
+        let level = 0
+        let k = j + 1
+        while (code[k] === '=') { level++; k++ }
+        if (code[k] === '[') {
+          k++
+          while (k < code.length) {
+            if (code[k] === ']') {
+              let endLevel = 0
+              let m = k + 1
+              while (code[m] === '=') { endLevel++; m++ }
+              if (code[m] === ']' && endLevel === level) {
+                i = m + 1
+                break
+              }
+            }
+            k++
+          }
+          continue
+        }
+      }
+      while (j < code.length && code[j] !== '\n') j++
+      i = j
+      continue
+    }
+    
+    if (/\s/.test(char)) {
+      const prevChar = result[result.length - 1] || ''
+      let j = i
+      while (j < code.length && /\s/.test(code[j])) j++
+      const nextChar = code[j] || ''
+      
+      const needsSpace = /[a-zA-Z0-9_]/.test(prevChar) && /[a-zA-Z0-9_]/.test(nextChar)
+      if (needsSpace) result += ' '
+      i = j
+      continue
+    }
+    
+    result += char
+    i++
+  }
+  
+  return result.trim()
 }
