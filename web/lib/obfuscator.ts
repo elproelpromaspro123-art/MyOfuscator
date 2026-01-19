@@ -8,13 +8,21 @@ export interface ObfuscationResult {
 }
 
 function randomVar(): string {
-  const chars = 'lI1'
+  const chars = 'abcdefghijklmnopqrstuvwxyz'
   let name = '_'
-  const len = 8 + Math.floor(Math.random() * 8)
+  const len = 6 + Math.floor(Math.random() * 6)
   for (let i = 0; i < len; i++) {
     name += chars[Math.floor(Math.random() * chars.length)]
   }
   return name
+}
+
+function escapeLuaString(s: string): string {
+  return s
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/\r/g, '\\r')
+    .replace(/\n/g, '\\n')
 }
 
 function extractStrings(code: string): { code: string; strings: string[]; placeholders: string[] } {
@@ -79,8 +87,8 @@ function extractStrings(code: string): { code: string; strings: string[]; placeh
       }
 
       const fullStr = code.slice(i, j + 1)
-      
-      if (str.length < 3 || str.includes('://') || str.includes('\\n') || /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(str)) {
+
+      if (str.length < 4 || str.includes('://') || str.includes('\\n') || str.includes('\\r')) {
         result += fullStr
       } else {
         const placeholder = `__STR${strings.length}__`
@@ -102,12 +110,23 @@ function extractStrings(code: string): { code: string; strings: string[]; placeh
 function encryptString(str: string): string {
   const key = Math.floor(Math.random() * 200) + 50
   const bytes: number[] = []
-  for (let i = 0; i < str.length; i++) {
-    const c = str.charCodeAt(i)
-    bytes.push(c ^ key)
+  
+  const unescaped = str
+    .replace(/\\n/g, '\n')
+    .replace(/\\r/g, '\r')
+    .replace(/\\t/g, '\t')
+    .replace(/\\"/g, '"')
+    .replace(/\\'/g, "'")
+    .replace(/\\\\/g, '\\')
+  
+  for (let i = 0; i < unescaped.length; i++) {
+    bytes.push(unescaped.charCodeAt(i) ^ key)
   }
-  const v = randomVar()
-  return `(function()local ${v}={${bytes.join(',')}}local s=""for i=1,#${v} do s=s..string.char(${v}[i]~${key})end return s end)()`
+
+  const arr = randomVar()
+  const out = randomVar()
+
+  return `(function() local ${arr}={${bytes.join(',')}} local ${out}={} for i=1,#${arr} do ${out}[i]=string.char(bit32.bxor(${arr}[i],${key})) end return table.concat(${out}) end)()`
 }
 
 function restoreStrings(code: string, strings: string[], placeholders: string[], encrypt: boolean): string {
@@ -116,7 +135,7 @@ function restoreStrings(code: string, strings: string[], placeholders: string[],
     if (encrypt) {
       result = result.replace(placeholders[i], encryptString(strings[i]))
     } else {
-      result = result.replace(placeholders[i], `"${strings[i]}"`)
+      result = result.replace(placeholders[i], `"${escapeLuaString(strings[i])}"`)
     }
   }
   return result
@@ -124,35 +143,36 @@ function restoreStrings(code: string, strings: string[], placeholders: string[],
 
 function wrapInFunction(code: string): string {
   const v = randomVar()
-  return `local ${v}=(function()${code} end)()return ${v}`
+  return `local ${v}=(function() ${code} end)() return ${v}`
 }
 
 function addAntiTamper(code: string): string {
   const v1 = randomVar()
-  return `local ${v1}=type if ${v1}(pcall)~="function"or ${v1}(error)~="function"then return end ${code}`
+  return `local ${v1}=type; if ${v1}(pcall)~="function" or ${v1}(error)~="function" then return end; ${code}`
 }
 
-function obfuscateNumbers(code: string, strings: string[], placeholders: string[]): string {
+function obfuscateNumbers(code: string, placeholders: string[]): string {
   let tempCode = code
+  
   for (let i = 0; i < placeholders.length; i++) {
-    tempCode = tempCode.replace(placeholders[i], `"__PLACEHOLDER_${i}__"`)
+    tempCode = tempCode.replace(placeholders[i], `"__PH${i}__"`)
   }
 
-  tempCode = tempCode.replace(/\b(\d+)\b/g, (match, num, offset) => {
-    const before = tempCode.slice(Math.max(0, offset - 20), offset)
-    if (before.includes('PlaceId') || before.includes('==') || before.includes('~=')) {
+  tempCode = tempCode.replace(/(\b)(\d+)(\b)/g, (match, before, num, after, offset) => {
+    const context = tempCode.slice(Math.max(0, offset - 30), offset)
+    if (context.includes('PlaceId') || context.includes('==') || context.includes('~=') || context.includes('bit32')) {
       return match
     }
     const n = parseInt(num, 10)
-    if (n >= 2 && n <= 500 && Math.random() > 0.5) {
-      const a = Math.floor(Math.random() * 20) + 1
-      return `(${n + a}-${a})`
+    if (n >= 2 && n <= 200 && Math.random() > 0.6) {
+      const a = Math.floor(Math.random() * 10) + 1
+      return `${before}(${n + a}-${a})${after}`
     }
     return match
   })
 
   for (let i = 0; i < placeholders.length; i++) {
-    tempCode = tempCode.replace(`"__PLACEHOLDER_${i}__"`, placeholders[i])
+    tempCode = tempCode.replace(`"__PH${i}__"`, placeholders[i])
   }
 
   return tempCode
@@ -162,15 +182,13 @@ function addJunkCode(code: string): string {
   const junks: string[] = []
   for (let i = 0; i < 2; i++) {
     const v = randomVar()
-    junks.push(`local ${v}=${Math.floor(Math.random() * 999)}`)
+    junks.push(`local ${v}=${Math.floor(Math.random() * 999)};`)
   }
-  return junks.join(';') + ';' + code
+  return junks.join(' ') + ' ' + code
 }
 
 function addOpaqueCheck(code: string): string {
-  const checks = ['(1==1)', '(true)', '(not false)']
-  const check = checks[Math.floor(Math.random() * checks.length)]
-  return `if ${check} then ${code} end`
+  return `if true then ${code} end`
 }
 
 function minifyLua(code: string): string {
@@ -266,21 +284,18 @@ export async function obfuscateCode(
   code: string,
   settings: ObfuscationSettings
 ): Promise<ObfuscationResult> {
-  await new Promise(resolve => setTimeout(resolve, 100 + Math.random() * 200))
+  await new Promise(resolve => setTimeout(resolve, 50 + Math.random() * 100))
 
   const { code: processedCode, strings, placeholders } = extractStrings(code)
-  
+
   let result = processedCode
   let stepsApplied = 0
-  const shouldEncrypt = settings.preset !== 'Low'
 
   if (settings.preset === 'Low') {
     result = restoreStrings(result, strings, placeholders, false)
     result = wrapInFunction(result)
     stepsApplied = 1
   } else if (settings.preset === 'Medium') {
-    result = obfuscateNumbers(result, strings, placeholders)
-    stepsApplied++
     result = restoreStrings(result, strings, placeholders, true)
     stepsApplied++
     result = addAntiTamper(result)
@@ -288,20 +303,18 @@ export async function obfuscateCode(
     result = wrapInFunction(result)
     stepsApplied++
   } else if (settings.preset === 'High') {
-    result = obfuscateNumbers(result, strings, placeholders)
+    result = obfuscateNumbers(result, placeholders)
     stepsApplied++
     result = restoreStrings(result, strings, placeholders, true)
     stepsApplied++
     result = addJunkCode(result)
     stepsApplied++
     result = addAntiTamper(result)
-    stepsApplied++
-    result = addOpaqueCheck(result)
     stepsApplied++
     result = wrapInFunction(result)
     stepsApplied++
   } else if (settings.preset === 'Maximum') {
-    result = obfuscateNumbers(result, strings, placeholders)
+    result = obfuscateNumbers(result, placeholders)
     stepsApplied++
     result = restoreStrings(result, strings, placeholders, true)
     stepsApplied++
@@ -312,9 +325,6 @@ export async function obfuscateCode(
     result = addOpaqueCheck(result)
     stepsApplied++
     result = wrapInFunction(result)
-    stepsApplied++
-    const v = randomVar()
-    result = `local ${v}=(function()${result} end)()return ${v}`
     stepsApplied++
   }
 
