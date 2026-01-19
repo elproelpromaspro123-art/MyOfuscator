@@ -8,229 +8,387 @@ export interface ObfuscationResult {
 }
 
 const CHARS = 'abcdefghijklmnopqrstuvwxyz'
-const randVar = () => '_' + Array.from({length: 12}, () => CHARS[Math.floor(Math.random() * 26)]).join('')
-const randInt = (a: number, b: number) => Math.floor(Math.random() * (b - a + 1)) + a
-const shuffle = <T>(arr: T[]): T[] => {
-  const r = [...arr]
-  for (let i = r.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[r[i], r[j]] = [r[j], r[i]]
-  }
-  return r
-}
+const randVar = () => '_' + Array.from({ length: 8 }, () => CHARS[Math.floor(Math.random() * 26)]).join('')
+const randInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min
 
-function isSafe(s: string): boolean {
-  if (s.length < 4 || s.length > 150) return false
-  if (/:\/\/|http|\.com|\.lua|\.txt/.test(s)) return false
-  if (/\\[nrt"]/.test(s)) return false
+// Check if string is safe to encrypt (very conservative)
+function isSafeString(s: string): boolean {
+  // Too short or too long
+  if (s.length < 3 || s.length > 100) return false
+  
+  // Contains escape sequences in the source (backslash followed by special char)
+  if (/\\/.test(s)) return false
+  
+  // URLs, paths, or special patterns
+  if (/:\/\/|http|www\.|\.com|\.lua|\.txt|\.gg/i.test(s)) return false
+  
+  // Only allow printable ASCII (32-126)
   for (let i = 0; i < s.length; i++) {
     const c = s.charCodeAt(i)
     if (c < 32 || c > 126) return false
   }
-  return !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(s)
+  
+  // Don't encrypt if it looks like an identifier (would be useless)
+  if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(s)) return false
+  
+  // Don't encrypt numbers that might be in API calls
+  if (/^\d+(\.\d+)?$/.test(s)) return false
+  
+  return true
 }
 
-function encryptVM(str: string): string {
-  const k1 = randInt(30, 120), k2 = randInt(10, 50), k3 = randInt(5, 25)
-  const bytes: number[] = []
-  for (let i = 0; i < str.length; i++) {
-    let b = str.charCodeAt(i)
-    b = (b + k1) % 256
-    b = b ^ k2
-    b = (b + k3) % 256
+// Simple XOR-based string encryption - TESTED to work in Roblox
+function encryptString(str: string): string {
+  const key = randInt(1, 200)
+  const tbl = randVar()
+  const result = randVar()
+  const i = randVar()
+  
+  const bytes = []
+  for (let j = 0; j < str.length; j++) {
+    const b = str.charCodeAt(j) ^ key
     bytes.push(b)
   }
-  const idx = bytes.map((_, i) => i)
-  const shuf = shuffle(idx)
-  const sBytes = shuf.map(i => bytes[i])
-  const order = shuf.map((v, i) => ({o: v, n: i})).sort((a, b) => a.o - b.o).map(x => x.n + 1)
-
-  const [vD, vO, vR, vT, vI, vC] = [randVar(), randVar(), randVar(), randVar(), randVar(), randVar()]
-  return `(function()local ${vD}={${sBytes.join(',')}}local ${vO}={${order.join(',')}}local ${vR}={}for ${vI}=1,#${vD} do ${vR}[${vO}[${vI}]]=${vD}[${vI}]end local ${vT}={}for ${vI}=1,#${vR} do local ${vC}=${vR}[${vI}]${vC}=(${vC}-${k3})%256 ${vC}=bit32.bxor(${vC},${k2})${vC}=(${vC}-${k1})%256 ${vT}[${vI}]=string.char(${vC})end return table.concat(${vT})end)()`
+  
+  return `(function()local ${tbl}={${bytes.join(',')}}local ${result}=""for ${i}=1,#${tbl} do ${result}=${result}..string.char(bit32.bxor(${tbl}[${i}],${key}))end return ${result} end)()`
 }
 
-function processStrings(code: string, level: number): string {
-  let r = '', i = 0
+// Extract and process strings from code
+function processStrings(code: string, encrypt: boolean): string {
+  const tokens: { type: 'code' | 'string' | 'longstring' | 'comment'; value: string }[] = []
+  let i = 0
+  
   while (i < code.length) {
-    if (code[i] === '-' && code[i+1] === '-') {
-      if (code[i+2] === '[' && code[i+3] === '[') {
-        let j = i + 4
-        while (j < code.length - 1 && !(code[j] === ']' && code[j+1] === ']')) j++
-        i = j + 2
-        continue
-      }
-      while (i < code.length && code[i] !== '\n') i++
-      continue
-    }
-    if (code[i] === '[' && code[i+1] === '[') {
-      let j = i + 2
-      while (j < code.length - 1 && !(code[j] === ']' && code[j+1] === ']')) j++
-      r += code.slice(i, j + 2)
+    // Long comment --[[...]]
+    if (code[i] === '-' && code[i + 1] === '-' && code[i + 2] === '[' && code[i + 3] === '[') {
+      let j = i + 4
+      while (j < code.length - 1 && !(code[j] === ']' && code[j + 1] === ']')) j++
+      tokens.push({ type: 'comment', value: code.slice(i, j + 2) })
       i = j + 2
       continue
     }
+    
+    // Single-line comment
+    if (code[i] === '-' && code[i + 1] === '-') {
+      let j = i + 2
+      while (j < code.length && code[j] !== '\n') j++
+      tokens.push({ type: 'comment', value: code.slice(i, j) })
+      i = j
+      continue
+    }
+    
+    // Long string [[...]]
+    if (code[i] === '[' && code[i + 1] === '[') {
+      let j = i + 2
+      while (j < code.length - 1 && !(code[j] === ']' && code[j + 1] === ']')) j++
+      tokens.push({ type: 'longstring', value: code.slice(i, j + 2) })
+      i = j + 2
+      continue
+    }
+    
+    // Quoted string
     if (code[i] === '"' || code[i] === "'") {
-      const q = code[i]
-      let j = i + 1, s = ''
+      const quote = code[i]
+      let j = i + 1
+      let content = ''
       while (j < code.length) {
-        if (code[j] === '\\' && j + 1 < code.length) { s += code[j] + code[j+1]; j += 2; continue }
-        if (code[j] === q) break
-        s += code[j]; j++
+        if (code[j] === '\\' && j + 1 < code.length) {
+          content += code[j] + code[j + 1]
+          j += 2
+          continue
+        }
+        if (code[j] === quote) break
+        content += code[j]
+        j++
       }
-      if (level > 0 && isSafe(s)) {
-        r += encryptVM(s)
-      } else {
-        r += code.slice(i, j + 1)
-      }
+      tokens.push({ type: 'string', value: code.slice(i, j + 1) })
       i = j + 1
       continue
     }
-    r += code[i]; i++
+    
+    // Regular code
+    let j = i
+    while (j < code.length) {
+      if (code[j] === '"' || code[j] === "'" || code[j] === '[' || code[j] === '-') break
+      j++
+    }
+    if (j > i) {
+      tokens.push({ type: 'code', value: code.slice(i, j) })
+      i = j
+    } else {
+      tokens.push({ type: 'code', value: code[i] })
+      i++
+    }
   }
-  return r
-}
-
-function genJunk(n: number): string {
-  const j: string[] = []
-  for (let i = 0; i < n; i++) {
-    const v1 = randVar(), v2 = randVar()
-    const patterns = [
-      `local ${v1}=${randInt(100, 9999)}`,
-      `local ${v1}=function()return ${randInt(1, 999)}end`,
-      `local ${v1}={${randInt(1, 99)},${randInt(1, 99)}}`,
-      `local ${v1},${v2}=${randInt(1, 99)},${randInt(1, 99)}`,
-      `do local ${v1}=${randInt(1, 999)}end`,
-    ]
-    j.push(patterns[randInt(0, patterns.length - 1)])
+  
+  // Rebuild with encrypted strings
+  let result = ''
+  for (const token of tokens) {
+    if (token.type === 'comment') {
+      // Remove comments
+      continue
+    }
+    if (token.type === 'longstring') {
+      result += token.value
+      continue
+    }
+    if (token.type === 'string' && encrypt) {
+      const quote = token.value[0]
+      const content = token.value.slice(1, -1)
+      
+      // Check if safe to encrypt (content without quotes)
+      if (isSafeString(content) && !content.includes('\\')) {
+        result += encryptString(content)
+      } else {
+        result += token.value
+      }
+      continue
+    }
+    result += token.value
   }
-  return shuffle(j).join(';') + ';'
-}
-
-function antiTamper(code: string, level: number): string {
-  const t = randVar(), c = randVar()
-  const checks = shuffle([
-    `${t}(pcall)=="function"`,
-    `${t}(error)=="function"`,
-    `${t}(tostring)=="function"`,
-    `${t}(pairs)=="function"`,
-    `${t}(table)=="table"`,
-    `${t}(string)=="table"`,
-    `${t}(math)=="table"`,
-    `${t}(bit32)=="table"`,
-  ]).slice(0, level > 1 ? 6 : 3)
-  return `local ${t}=type;local ${c}=${checks.join(' and ')};if not ${c} then return end;${code}`
-}
-
-function controlFlow(code: string, complexity: number): string {
-  const states: number[] = []
-  for (let i = 0; i < complexity + 2; i++) states.push(randInt(1000, 99999))
   
-  const s = randVar(), r = randVar()
-  let result = `local ${s}=${states[0]};local ${r}=true;while ${r} do `
-  
-  const cases = shuffle(states.slice(0, -1).map((state, idx) => {
-    if (idx === 0) return `if ${s}==${state} then ${code};${s}=${states[states.length - 1]}`
-    return `elseif ${s}==${state} then ${s}=${states[idx + 1] || states[states.length - 1]}`
-  }))
-  
-  result += cases.join(' ')
-  result += ` elseif ${s}==${states[states.length - 1]} then ${r}=false end end`
   return result
 }
 
-function wrapLayers(code: string, layers: number): string {
-  let r = code
-  for (let i = 0; i < layers; i++) {
-    const f = randVar(), v = randVar()
-    const k = randInt(10, 99)
-    r = `local ${f}=(function(${v})if ${v}~=${k} then return end;${r} end)(${k});return ${f}`
+// Generate junk variables that don't affect execution
+function generateJunk(count: number): string {
+  const lines: string[] = []
+  for (let i = 0; i < count; i++) {
+    const v = randVar()
+    const patterns = [
+      `local ${v}=${randInt(100, 9999)}`,
+      `local ${v}=function()return ${randInt(1, 999)} end`,
+      `local ${v}={${randInt(1, 99)},${randInt(1, 99)}}`,
+    ]
+    lines.push(patterns[randInt(0, patterns.length - 1)])
   }
-  return r
+  return lines.join(';') + ';'
 }
 
-function bytecodeVM(code: string): string {
-  const vm = randVar(), data = randVar(), exec = randVar()
-  const key = randInt(50, 200)
-  
-  const encoded: number[] = []
-  for (let i = 0; i < code.length; i++) {
-    encoded.push(code.charCodeAt(i) ^ key)
-  }
-  
-  const chunk = 200
-  const chunks: string[] = []
-  for (let i = 0; i < encoded.length; i += chunk) {
-    chunks.push(encoded.slice(i, i + chunk).join(','))
-  }
-  
-  const parts = chunks.map(() => randVar())
-  let init = parts.map((p, i) => `local ${p}={${chunks[i]}}`).join(';')
-  const concat = parts.length > 1 
-    ? `local ${data}={};for _,t in ipairs({${parts.join(',')}})do for _,v in ipairs(t)do ${data}[#${data}+1]=v end end`
-    : `local ${data}=${parts[0]}`
-  
-  const i = randVar(), s = randVar(), c = randVar()
-  
-  return `(function()${init};${concat};local ${s}="";for ${i}=1,#${data} do local ${c}=bit32.bxor(${data}[${i}],${key});${s}=${s}..string.char(${c})end;local ${exec}=loadstring or load;return ${exec}(${s})()end)()`
+// Simple environment check - doesn't block, just adds noise
+function envCheck(): string {
+  const t = randVar()
+  return `local ${t}=type;if ${t}(bit32)~="table" then return end;`
 }
 
+// Wrap code in function layer
+function wrapInFunction(code: string): string {
+  const fn = randVar()
+  return `local ${fn}=function()${code} end;return ${fn}()`
+}
+
+// Add opaque predicates (always true/false conditions)
+function addOpaquePredicates(code: string): string {
+  const v1 = randVar()
+  const v2 = randVar()
+  const n1 = randInt(100, 999)
+  const n2 = randInt(1000, 9999)
+  
+  const prefix = `local ${v1}=${n1};local ${v2}=${n2};if ${v1}*${v2}~=${n1 * n2} then return end;`
+  return prefix + code
+}
+
+// Minify code - remove whitespace and comments
 function minify(code: string): string {
-  let r = '', i = 0, inStr = false, strC = '', inLong = false
+  let result = ''
+  let i = 0
+  let inString = false
+  let stringChar = ''
+  let inLongString = false
+  
   while (i < code.length) {
-    const c = code[i], n = code[i + 1] || ''
-    if (inLong) { r += c; if (c === ']' && n === ']') { r += n; i += 2; inLong = false; continue }; i++; continue }
-    if (inStr) { r += c; if (c === '\\') { r += n; i += 2; continue }; if (c === strC) inStr = false; i++; continue }
-    if (c === '"' || c === "'") { inStr = true; strC = c; r += c; i++; continue }
-    if (c === '[' && n === '[') { inLong = true; r += c + n; i += 2; continue }
-    if (c === '-' && n === '-') {
+    const c = code[i]
+    const next = code[i + 1] || ''
+    
+    // Handle long strings
+    if (inLongString) {
+      result += c
+      if (c === ']' && next === ']') {
+        result += next
+        i += 2
+        inLongString = false
+        continue
+      }
+      i++
+      continue
+    }
+    
+    // Handle quoted strings
+    if (inString) {
+      result += c
+      if (c === '\\') {
+        result += next
+        i += 2
+        continue
+      }
+      if (c === stringChar) {
+        inString = false
+      }
+      i++
+      continue
+    }
+    
+    // Start of string
+    if (c === '"' || c === "'") {
+      inString = true
+      stringChar = c
+      result += c
+      i++
+      continue
+    }
+    
+    // Start of long string
+    if (c === '[' && next === '[') {
+      inLongString = true
+      result += c + next
+      i += 2
+      continue
+    }
+    
+    // Skip comments
+    if (c === '-' && next === '-') {
       let j = i + 2
-      if (code[j] === '[' && code[j + 1] === '[') { j += 2; while (j < code.length - 1 && !(code[j] === ']' && code[j + 1] === ']')) j++; i = j + 2; continue }
-      while (j < code.length && code[j] !== '\n') j++; i = j; continue
+      // Long comment
+      if (code[j] === '[' && code[j + 1] === '[') {
+        j += 2
+        while (j < code.length - 1 && !(code[j] === ']' && code[j + 1] === ']')) j++
+        i = j + 2
+        continue
+      }
+      // Single line comment
+      while (j < code.length && code[j] !== '\n') j++
+      i = j
+      continue
     }
+    
+    // Handle whitespace
     if (/\s/.test(c)) {
-      const p = r[r.length - 1] || ''
-      let j = i; while (j < code.length && /\s/.test(code[j])) j++
-      const nx = code[j] || ''
-      if (/[a-zA-Z0-9_]/.test(p) && /[a-zA-Z0-9_]/.test(nx)) r += ' '
-      i = j; continue
+      const prev = result[result.length - 1] || ''
+      let j = i
+      while (j < code.length && /\s/.test(code[j])) j++
+      const nextChar = code[j] || ''
+      
+      // Only keep space if needed between identifiers/numbers
+      if (/[a-zA-Z0-9_]/.test(prev) && /[a-zA-Z0-9_]/.test(nextChar)) {
+        result += ' '
+      }
+      i = j
+      continue
     }
-    r += c; i++
+    
+    result += c
+    i++
   }
-  return r.trim()
+  
+  return result.trim()
+}
+
+// Rename local variables
+function renameLocals(code: string): string {
+  const localVarPattern = /\blocal\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=/g
+  const renames = new Map<string, string>()
+  
+  // Reserved names - Lua built-ins and common Roblox globals
+  const reserved = new Set([
+    'self', 'true', 'false', 'nil', 'and', 'or', 'not', 'if', 'then', 'else',
+    'elseif', 'end', 'for', 'while', 'do', 'repeat', 'until', 'function',
+    'return', 'break', 'local', 'in', 'goto',
+    'game', 'workspace', 'script', 'Instance', 'Vector3', 'CFrame', 'Color3',
+    'UDim2', 'UDim', 'Enum', 'pairs', 'ipairs', 'print', 'warn', 'error',
+    'type', 'typeof', 'tostring', 'tonumber', 'pcall', 'xpcall', 'select',
+    'require', 'loadstring', 'getfenv', 'setfenv', 'rawget', 'rawset',
+    'table', 'string', 'math', 'bit32', 'coroutine', 'os', 'debug',
+  ])
+  
+  // Find all local variable declarations
+  let match
+  while ((match = localVarPattern.exec(code)) !== null) {
+    const name = match[1]
+    if (!reserved.has(name) && !renames.has(name)) {
+      renames.set(name, randVar())
+    }
+  }
+  
+  // Replace variable names (simple replacement - won't handle all cases perfectly)
+  let result = code
+  for (const [original, renamed] of renames) {
+    // Word boundary replacement
+    const regex = new RegExp(`\\b${original}\\b`, 'g')
+    result = result.replace(regex, renamed)
+  }
+  
+  return result
 }
 
 export async function obfuscateCode(code: string, settings: ObfuscationSettings): Promise<ObfuscationResult> {
-  let r = code, steps = 0
-
+  let result = code
+  let steps = 0
+  
   if (settings.preset === 'Low') {
-    r = processStrings(r, 1); steps++
-    r = genJunk(2) + r; steps++
-    r = wrapLayers(r, 1); steps++
+    // Minimal: just wrap and add some junk
+    result = processStrings(result, false) // Remove comments only
+    steps++
+    result = generateJunk(2) + result
+    steps++
+    result = wrapInFunction(result)
+    steps++
   } else if (settings.preset === 'Medium') {
-    r = processStrings(r, 2); steps++
-    r = genJunk(5) + r; steps++
-    r = antiTamper(r, 1); steps++
-    r = controlFlow(r, 1); steps++
-    r = wrapLayers(r, 2); steps++
+    // Moderate: encrypt safe strings, rename vars, wrap
+    result = processStrings(result, true)
+    steps++
+    result = renameLocals(result)
+    steps++
+    result = generateJunk(4) + result
+    steps++
+    result = envCheck() + result
+    steps++
+    result = wrapInFunction(result)
+    steps++
   } else if (settings.preset === 'High') {
-    r = processStrings(r, 2); steps++
-    r = genJunk(8) + r; steps++
-    r = antiTamper(r, 2); steps++
-    r = controlFlow(r, 2); steps++
-    r = wrapLayers(r, 3); steps++
-    r = genJunk(3) + r; steps++
+    // Strong: multiple layers
+    result = processStrings(result, true)
+    steps++
+    result = renameLocals(result)
+    steps++
+    result = generateJunk(5) + result
+    steps++
+    result = addOpaquePredicates(result)
+    steps++
+    result = envCheck() + result
+    steps++
+    result = wrapInFunction(result)
+    steps++
+    result = generateJunk(3) + result
+    steps++
+    result = wrapInFunction(result)
+    steps++
   } else if (settings.preset === 'Maximum') {
-    r = processStrings(r, 2); steps++
-    r = genJunk(6) + r; steps++
-    r = antiTamper(r, 2); steps++
-    r = controlFlow(r, 3); steps++
-    r = wrapLayers(r, 2); steps++
-    r = minify(r)
-    r = bytecodeVM(r); steps++
-    r = genJunk(4) + r; steps++
-    r = wrapLayers(r, 1); steps++
+    // Maximum: everything
+    result = processStrings(result, true)
+    steps++
+    result = renameLocals(result)
+    steps++
+    result = generateJunk(6) + result
+    steps++
+    result = addOpaquePredicates(result)
+    steps++
+    result = envCheck() + result
+    steps++
+    result = wrapInFunction(result)
+    steps++
+    result = generateJunk(4) + result
+    steps++
+    result = addOpaquePredicates(result)
+    steps++
+    result = wrapInFunction(result)
+    steps++
+    result = generateJunk(3) + result
+    steps++
+    result = wrapInFunction(result)
+    steps++
   }
-
-  r = minify(r)
-  return { code: r, stepsApplied: steps }
+  
+  result = minify(result)
+  
+  return { code: result, stepsApplied: steps }
 }

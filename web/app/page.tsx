@@ -81,12 +81,17 @@ export default function Home() {
       <Header />
       
       <main className="flex-1 container mx-auto px-4 py-8 max-w-6xl">
-        <div className="text-center mb-10">
-          <h1 className="text-3xl font-bold mb-2">Lua Obfuscator</h1>
-          <p className="text-zinc-500">Protect your Roblox scripts with advanced obfuscation</p>
+        {/* Hero */}
+        <div className="text-center mb-12">
+          <h1 className="text-4xl font-bold mb-3">Lua Obfuscator</h1>
+          <p className="text-zinc-400 text-lg max-w-2xl mx-auto">
+            Protect your Roblox scripts with executor-compatible obfuscation.
+            Works with Delta, Velocity, Xeno, and more.
+          </p>
         </div>
 
-        <div className="grid lg:grid-cols-4 gap-6">
+        {/* Editor Section */}
+        <div className="grid lg:grid-cols-4 gap-6 mb-16">
           <div className="lg:col-span-1">
             <SettingsPanel settings={settings} onChange={setSettings} />
           </div>
@@ -155,6 +160,107 @@ export default function Home() {
             )}
           </div>
         </div>
+
+        {/* Why Section */}
+        <section className="mb-16">
+          <h2 className="text-2xl font-bold text-center mb-8">Why Prometheus?</h2>
+          <div className="grid md:grid-cols-3 gap-6">
+            <div className="card p-6">
+              <div className="text-blue-400 text-2xl mb-3">⚡</div>
+              <h3 className="font-semibold mb-2">Executor Compatible</h3>
+              <p className="text-sm text-zinc-400">
+                Built specifically for modern executors. Uses bit32 operations and avoids 
+                sandboxed functions like loadstring in the output.
+              </p>
+            </div>
+            <div className="card p-6">
+              <div className="text-blue-400 text-2xl mb-3">🛡️</div>
+              <h3 className="font-semibold mb-2">Smart String Protection</h3>
+              <p className="text-sm text-zinc-400">
+                Encrypts strings while preserving URLs, escape sequences, and API calls 
+                that would break if modified.
+              </p>
+            </div>
+            <div className="card p-6">
+              <div className="text-blue-400 text-2xl mb-3">🔧</div>
+              <h3 className="font-semibold mb-2">4 Protection Levels</h3>
+              <p className="text-sm text-zinc-400">
+                From minimal wrapping to multi-layer protection. Choose the right balance 
+                of security and performance.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* Comparison Section */}
+        <section className="mb-16">
+          <h2 className="text-2xl font-bold text-center mb-8">How We Compare</h2>
+          <div className="card overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-zinc-800">
+                  <th className="text-left p-4 text-zinc-400">Feature</th>
+                  <th className="p-4 text-center text-blue-400">Prometheus</th>
+                  <th className="p-4 text-center text-zinc-500">Others</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-800/50">
+                <tr>
+                  <td className="p-4 text-zinc-300">Executor Compatible</td>
+                  <td className="p-4 text-center text-green-400">✓</td>
+                  <td className="p-4 text-center text-red-400">Often breaks</td>
+                </tr>
+                <tr>
+                  <td className="p-4 text-zinc-300">Preserves loadstring() calls</td>
+                  <td className="p-4 text-center text-green-400">✓</td>
+                  <td className="p-4 text-center text-red-400">Wraps everything</td>
+                </tr>
+                <tr>
+                  <td className="p-4 text-zinc-300">Safe string handling</td>
+                  <td className="p-4 text-center text-green-400">✓</td>
+                  <td className="p-4 text-center text-yellow-400">Partial</td>
+                </tr>
+                <tr>
+                  <td className="p-4 text-zinc-300">LuaU/Roblox focused</td>
+                  <td className="p-4 text-center text-green-400">✓</td>
+                  <td className="p-4 text-center text-yellow-400">Generic Lua</td>
+                </tr>
+                <tr>
+                  <td className="p-4 text-zinc-300">Free to use</td>
+                  <td className="p-4 text-center text-green-400">✓</td>
+                  <td className="p-4 text-center text-yellow-400">Varies</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        {/* FAQ Section */}
+        <section className="mb-16">
+          <h2 className="text-2xl font-bold text-center mb-8">FAQ</h2>
+          <div className="space-y-4 max-w-3xl mx-auto">
+            <div className="card p-5">
+              <h3 className="font-semibold mb-2">Which executors are supported?</h3>
+              <p className="text-sm text-zinc-400">
+                Delta, Velocity, Xeno, Synapse, and most modern executors. We use bit32 
+                operations and avoid Lua 5.3+ syntax.
+              </p>
+            </div>
+            <div className="card p-5">
+              <h3 className="font-semibold mb-2">Why isn't my script working after obfuscation?</h3>
+              <p className="text-sm text-zinc-400">
+                Try a lower protection level. Some complex scripts with loadstring or 
+                dynamic code generation work better with Low or Medium presets.
+              </p>
+            </div>
+            <div className="card p-5">
+              <h3 className="font-semibold mb-2">Is my code stored anywhere?</h3>
+              <p className="text-sm text-zinc-400">
+                No. All obfuscation happens in your browser. Your code never leaves your device.
+              </p>
+            </div>
+          </div>
+        </section>
       </main>
 
       <Footer />

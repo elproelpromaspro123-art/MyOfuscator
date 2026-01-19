@@ -8,10 +8,10 @@ interface Props {
 }
 
 const presets = [
-  { value: 'Low', label: 'Low', desc: 'String encryption, basic wrap', strength: 25 },
-  { value: 'Medium', label: 'Medium', desc: 'Control flow, anti-tamper', strength: 50 },
+  { value: 'Low', label: 'Low', desc: 'Wrap + junk code only', strength: 25 },
+  { value: 'Medium', label: 'Medium', desc: 'String encryption, var rename', strength: 50 },
   { value: 'High', label: 'High', desc: 'Multi-layer protection', strength: 75 },
-  { value: 'Maximum', label: 'Maximum', desc: 'Bytecode VM, full protection', strength: 100 },
+  { value: 'Maximum', label: 'Maximum', desc: 'Maximum layers + checks', strength: 100 },
 ] as const
 
 export default function SettingsPanel({ settings, onChange }: Props) {
@@ -61,25 +61,33 @@ export default function SettingsPanel({ settings, onChange }: Props) {
 
       <div className="text-xs text-zinc-600 space-y-1 pt-2 border-t border-zinc-800">
         <div className="flex gap-2">
-          <span className={settings.preset !== 'Low' ? 'text-green-500' : ''}>●</span>
+          <span className="text-green-500">●</span>
+          <span>Function Wrapping</span>
+        </div>
+        <div className="flex gap-2">
+          <span className="text-green-500">●</span>
+          <span>Junk Code Injection</span>
+        </div>
+        <div className="flex gap-2">
+          <span className={settings.preset !== 'Low' ? 'text-green-500' : 'text-zinc-700'}>●</span>
           <span>String Encryption</span>
         </div>
         <div className="flex gap-2">
           <span className={settings.preset !== 'Low' ? 'text-green-500' : 'text-zinc-700'}>●</span>
-          <span>Anti-Tamper</span>
+          <span>Variable Renaming</span>
         </div>
         <div className="flex gap-2">
-          <span className={settings.preset !== 'Low' ? 'text-green-500' : 'text-zinc-700'}>●</span>
-          <span>Control Flow</span>
+          <span className={settings.preset === 'High' || settings.preset === 'Maximum' ? 'text-green-500' : 'text-zinc-700'}>●</span>
+          <span>Opaque Predicates</span>
         </div>
         <div className="flex gap-2">
           <span className={settings.preset === 'High' || settings.preset === 'Maximum' ? 'text-green-500' : 'text-zinc-700'}>●</span>
           <span>Multi-Layer Wrap</span>
         </div>
-        <div className="flex gap-2">
-          <span className={settings.preset === 'Maximum' ? 'text-green-500' : 'text-zinc-700'}>●</span>
-          <span>Bytecode VM</span>
-        </div>
+      </div>
+
+      <div className="text-xs text-zinc-600 pt-2 border-t border-zinc-800">
+        <p>All presets are executor-safe. Use Low for scripts with loadstring.</p>
       </div>
     </div>
   )
