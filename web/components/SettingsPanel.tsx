@@ -8,14 +8,25 @@ interface Props {
 }
 
 const presets = [
-  { value: 'Low', label: 'Low', desc: 'Wrap + junk code only', strength: 25 },
-  { value: 'Medium', label: 'Medium', desc: 'String encryption, var rename', strength: 50 },
-  { value: 'High', label: 'High', desc: 'Multi-layer protection', strength: 75 },
-  { value: 'Maximum', label: 'Maximum', desc: 'Maximum layers + checks', strength: 100 },
+  { value: 'Low', label: 'Low', desc: 'Octal strings, basic wrap', strength: 25 },
+  { value: 'Medium', label: 'Medium', desc: 'XOR encryption, var rename', strength: 50 },
+  { value: 'High', label: 'High', desc: 'Custom Base64 + XOR', strength: 75 },
+  { value: 'Maximum', label: 'Maximum', desc: 'Max layers, full protection', strength: 100 },
 ] as const
 
 export default function SettingsPanel({ settings, onChange }: Props) {
   const current = presets.find(p => p.value === settings.preset) || presets[1]
+
+  const features = [
+    { name: 'Comment Removal', active: true },
+    { name: 'Octal String Encoding', active: true },
+    { name: 'XOR Encryption', active: settings.preset !== 'Low' },
+    { name: 'Variable Renaming', active: settings.preset !== 'Low' },
+    { name: 'Custom Base64', active: settings.preset === 'High' || settings.preset === 'Maximum' },
+    { name: 'Opaque Predicates', active: settings.preset === 'High' || settings.preset === 'Maximum' },
+    { name: 'Multi-Layer Wrap', active: settings.preset === 'High' || settings.preset === 'Maximum' },
+    { name: 'Environment Checks', active: settings.preset !== 'Low' },
+  ]
 
   return (
     <div className="card p-5 space-y-5">
@@ -60,34 +71,17 @@ export default function SettingsPanel({ settings, onChange }: Props) {
       </div>
 
       <div className="text-xs text-zinc-600 space-y-1 pt-2 border-t border-zinc-800">
-        <div className="flex gap-2">
-          <span className="text-green-500">●</span>
-          <span>Function Wrapping</span>
-        </div>
-        <div className="flex gap-2">
-          <span className="text-green-500">●</span>
-          <span>Junk Code Injection</span>
-        </div>
-        <div className="flex gap-2">
-          <span className={settings.preset !== 'Low' ? 'text-green-500' : 'text-zinc-700'}>●</span>
-          <span>String Encryption</span>
-        </div>
-        <div className="flex gap-2">
-          <span className={settings.preset !== 'Low' ? 'text-green-500' : 'text-zinc-700'}>●</span>
-          <span>Variable Renaming</span>
-        </div>
-        <div className="flex gap-2">
-          <span className={settings.preset === 'High' || settings.preset === 'Maximum' ? 'text-green-500' : 'text-zinc-700'}>●</span>
-          <span>Opaque Predicates</span>
-        </div>
-        <div className="flex gap-2">
-          <span className={settings.preset === 'High' || settings.preset === 'Maximum' ? 'text-green-500' : 'text-zinc-700'}>●</span>
-          <span>Multi-Layer Wrap</span>
-        </div>
+        {features.map(f => (
+          <div key={f.name} className="flex gap-2">
+            <span className={f.active ? 'text-green-500' : 'text-zinc-700'}>●</span>
+            <span>{f.name}</span>
+          </div>
+        ))}
       </div>
 
-      <div className="text-xs text-zinc-600 pt-2 border-t border-zinc-800">
-        <p>All presets are executor-safe. Use Low for scripts with loadstring.</p>
+      <div className="text-xs text-zinc-600 pt-2 border-t border-zinc-800 space-y-1">
+        <p>All strings encoded in octal format (\xxx)</p>
+        <p>No loadstring in output - executor safe</p>
       </div>
     </div>
   )
