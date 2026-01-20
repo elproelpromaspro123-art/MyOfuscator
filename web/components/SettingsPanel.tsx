@@ -8,24 +8,24 @@ interface Props {
 }
 
 const presets = [
-  { value: 'Low', label: 'Low', desc: 'Octal strings, basic wrap', strength: 25 },
-  { value: 'Medium', label: 'Medium', desc: 'XOR encryption, var rename', strength: 50 },
-  { value: 'High', label: 'High', desc: 'Custom Base64 + XOR', strength: 75 },
-  { value: 'Maximum', label: 'Maximum', desc: 'Max layers, full protection', strength: 100 },
+  { value: 'Low', label: 'Low', desc: 'String encoding, basic wrap', strength: 25 },
+  { value: 'Medium', label: 'Medium', desc: 'XOR encryption, env check', strength: 50 },
+  { value: 'High', label: 'High', desc: 'Opaque predicates, 3 layers', strength: 75 },
+  { value: 'Maximum', label: 'Maximum', desc: 'Max protection, 5+ layers', strength: 100 },
 ] as const
 
 export default function SettingsPanel({ settings, onChange }: Props) {
   const current = presets.find(p => p.value === settings.preset) || presets[1]
 
   const features = [
-    { name: 'Comment Removal', active: true },
-    { name: 'Octal String Encoding', active: true },
+    { name: 'All Strings Encrypted', active: true },
+    { name: 'URLs Hidden', active: true },
+    { name: 'Comments Removed', active: true },
     { name: 'XOR Encryption', active: settings.preset !== 'Low' },
-    { name: 'Variable Renaming', active: settings.preset !== 'Low' },
-    { name: 'Custom Base64', active: settings.preset === 'High' || settings.preset === 'Maximum' },
+    { name: 'Environment Check', active: settings.preset !== 'Low' },
     { name: 'Opaque Predicates', active: settings.preset === 'High' || settings.preset === 'Maximum' },
-    { name: 'Multi-Layer Wrap', active: settings.preset === 'High' || settings.preset === 'Maximum' },
-    { name: 'Environment Checks', active: settings.preset !== 'Low' },
+    { name: 'Multi-Layer IIFE', active: settings.preset === 'High' || settings.preset === 'Maximum' },
+    { name: 'Junk Code Injection', active: true },
   ]
 
   return (
@@ -80,8 +80,9 @@ export default function SettingsPanel({ settings, onChange }: Props) {
       </div>
 
       <div className="text-xs text-zinc-600 pt-2 border-t border-zinc-800 space-y-1">
-        <p>All strings encoded in octal format (\xxx)</p>
-        <p>No loadstring in output - executor safe</p>
+        <p className="text-green-600">✓ All strings hidden (URLs, text, etc.)</p>
+        <p className="text-green-600">✓ No loadstring in output</p>
+        <p className="text-green-600">✓ Executor compatible (IIFE wrapper)</p>
       </div>
     </div>
   )

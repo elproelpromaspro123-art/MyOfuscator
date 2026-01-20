@@ -7,7 +7,8 @@ export interface ObfuscationResult {
   stepsApplied: number
 }
 
-// Character sets
+// ==================== UTILITIES ====================
+
 const ALPHA = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
 const randVar = () => '_' + Array.from({ length: 12 }, () => ALPHA[Math.floor(Math.random() * 52)]).join('')
 const randInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min
@@ -21,28 +22,117 @@ function shuffle<T>(arr: T[]): T[] {
   return result
 }
 
-// Convert a single byte to 3-digit octal
-function byteToOctal(byte: number): string {
-  return '\\' + byte.toString(8).padStart(3, '0')
-}
+// ==================== LUA STRING DECODING ====================
+// Decode Lua escape sequences to actual characters
+// e.g. "\\n" (2 chars in source) -> "\n" (1 char newline)
 
-// Convert string to octal escape format
-function stringToOctal(str: string): string {
+function decodeLuaString(content: string): string {
   let result = ''
-  for (let i = 0; i < str.length; i++) {
-    result += byteToOctal(str.charCodeAt(i))
+  let i = 0
+  
+  while (i < content.length) {
+    if (content[i] === '\\' && i + 1 < content.length) {
+      const next = content[i + 1]
+      
+      switch (next) {
+        case 'n': result += '\n'; i += 2; break
+        case 'r': result += '\r'; i += 2; break
+        case 't': result += '\t'; i += 2; break
+        case 'v': result += '\v'; i += 2; break
+        case 'b': result += '\b'; i += 2; break
+        case 'f': result += '\f'; i += 2; break
+        case 'a': result += '\x07'; i += 2; break
+        case '\\': result += '\\'; i += 2; break
+        case '"': result += '"'; i += 2; break
+        case "'": result += "'"; i += 2; break
+        case '\n': result += '\n'; i += 2; break
+        case '\r': 
+          result += '\n'
+          i += 2
+          if (content[i] === '\n') i++
+          break
+        case 'x':
+          // Hex escape \xNN
+          if (i + 3 < content.length) {
+            const hex = content.slice(i + 2, i + 4)
+            const code = parseInt(hex, 16)
+            if (!isNaN(code)) {
+              result += String.fromCharCode(code)
+              i += 4
+              break
+            }
+          }
+          result += content[i]
+          i++
+          break
+        case 'z':
+          // \z skips following whitespace
+          i += 2
+          while (i < content.length && /\s/.test(content[i])) i++
+          break
+        default:
+          // Decimal escape \ddd (1-3 digits)
+          if (/\d/.test(next)) {
+            let numStr = ''
+            let j = i + 1
+            while (j < content.length && j < i + 4 && /\d/.test(content[j])) {
+              numStr += content[j]
+              j++
+            }
+            const code = parseInt(numStr, 10)
+            if (code <= 255) {
+              result += String.fromCharCode(code)
+              i = j
+            } else {
+              result += content[i]
+              i++
+            }
+          } else {
+            // Unknown escape, keep as-is
+            result += content[i]
+            i++
+          }
+      }
+    } else {
+      result += content[i]
+      i++
+    }
   }
+  
   return result
 }
 
-// Parse code into tokens (preserving exact positions)
+// ==================== UTF-8 ENCODING ====================
+// Convert string to UTF-8 bytes (handles all unicode correctly)
+
+function stringToUtf8Bytes(str: string): number[] {
+  const encoder = new TextEncoder()
+  return Array.from(encoder.encode(str))
+}
+
+// ==================== OCTAL ENCODING ====================
+// Convert byte (0-255) to 3-digit decimal escape \ddd (Lua uses decimal, not octal!)
+
+function byteToLuaEscape(byte: number): string {
+  // Lua uses DECIMAL escapes \ddd, not octal!
+  return '\\' + byte.toString(10).padStart(3, '0')
+}
+
+// Encode a string as Lua decimal escapes
+function stringToLuaEscapes(str: string): string {
+  const bytes = stringToUtf8Bytes(str)
+  return bytes.map(b => byteToLuaEscape(b)).join('')
+}
+
+// ==================== TOKENIZER ====================
+
 interface Token {
   type: 'code' | 'string' | 'longstring' | 'comment' | 'longcomment'
   value: string
   start: number
   end: number
   quote?: string
-  rawContent?: string
+  rawContent?: string // Content between quotes (with escapes as-is from source)
 }
 
 function tokenize(code: string): Token[] {
@@ -53,20 +143,29 @@ function tokenize(code: string): Token[] {
     const start = i
     
     // Long comment --[[...]]
-    if (code[i] === '-' && code[i + 1] === '-' && code[i + 2] === '[' && code[i + 3] === '[') {
+    if (code.slice(i, i + 4) === '--[[') {
       let j = i + 4
-      let depth = 1
-      while (j < code.length && depth > 0) {
-        if (code[j] === ']' && code[j + 1] === ']') {
-          depth--
-          if (depth === 0) break
-        }
-        j++
-      }
+      while (j < code.length - 1 && !(code[j] === ']' && code[j + 1] === ']')) j++
       j += 2
       tokens.push({ type: 'longcomment', value: code.slice(start, j), start, end: j })
       i = j
       continue
+    }
+    
+    // Long comment with equals --[=[...]=]
+    if (code.slice(i, i + 3) === '--[') {
+      let eqCount = 0
+      let j = i + 3
+      while (j < code.length && code[j] === '=') { eqCount++; j++ }
+      if (code[j] === '[') {
+        const endPattern = ']' + '='.repeat(eqCount) + ']'
+        let endIdx = code.indexOf(endPattern, j + 1)
+        if (endIdx === -1) endIdx = code.length
+        else endIdx += endPattern.length
+        tokens.push({ type: 'longcomment', value: code.slice(start, endIdx), start, end: endIdx })
+        i = endIdx
+        continue
+      }
     }
     
     // Single line comment
@@ -78,23 +177,26 @@ function tokenize(code: string): Token[] {
       continue
     }
     
-    // Long string [[...]] or [=[...]=] etc
+    // Long string [[...]] or [=[...]=]
     if (code[i] === '[') {
       let eqCount = 0
       let j = i + 1
-      while (j < code.length && code[j] === '=') {
-        eqCount++
-        j++
-      }
+      while (j < code.length && code[j] === '=') { eqCount++; j++ }
       if (code[j] === '[') {
-        // Found long string start
         const endPattern = ']' + '='.repeat(eqCount) + ']'
-        let searchStart = j + 1
-        let endIdx = code.indexOf(endPattern, searchStart)
+        const contentStart = j + 1
+        let endIdx = code.indexOf(endPattern, contentStart)
         if (endIdx === -1) endIdx = code.length
-        else endIdx += endPattern.length
-        tokens.push({ type: 'longstring', value: code.slice(start, endIdx), start, end: endIdx })
-        i = endIdx
+        const fullEnd = endIdx + endPattern.length
+        const content = code.slice(contentStart, endIdx)
+        tokens.push({ 
+          type: 'longstring', 
+          value: code.slice(start, fullEnd), 
+          start, 
+          end: fullEnd,
+          rawContent: content
+        })
+        i = fullEnd
         continue
       }
     }
@@ -111,13 +213,11 @@ function tokenize(code: string): Token[] {
           j += 2
           continue
         }
-        if (code[j] === quote) {
-          break
-        }
+        if (code[j] === quote) break
         content += code[j]
         j++
       }
-      j++ // include closing quote
+      j++
       
       tokens.push({ 
         type: 'string', 
@@ -131,10 +231,11 @@ function tokenize(code: string): Token[] {
       continue
     }
     
-    // Regular code (everything else until we hit a string/comment starter)
+    // Regular code
     let j = i
     while (j < code.length) {
-      if (code[j] === '"' || code[j] === "'" || code[j] === '[' || 
+      if (code[j] === '"' || code[j] === "'" || 
+          (code[j] === '[' && (code[j+1] === '[' || code[j+1] === '=')) ||
           (code[j] === '-' && code[j + 1] === '-')) {
         break
       }
@@ -145,7 +246,6 @@ function tokenize(code: string): Token[] {
       tokens.push({ type: 'code', value: code.slice(start, j), start, end: j })
       i = j
     } else {
-      // Single character that doesn't start anything special
       tokens.push({ type: 'code', value: code[i], start: i, end: i + 1 })
       i++
     }
@@ -154,48 +254,30 @@ function tokenize(code: string): Token[] {
   return tokens
 }
 
-// Check if string content is safe to encode (no escape sequences, no special chars)
-function isSafeToEncode(content: string): boolean {
-  // Has escape sequences like \n, \t, \\, \"
-  if (content.includes('\\')) return false
-  
-  // Check for non-ASCII characters (emojis, unicode)
-  for (let i = 0; i < content.length; i++) {
-    const code = content.charCodeAt(i)
-    if (code < 32 || code > 126) return false
-  }
-  
-  // Too short to bother
-  if (content.length < 2) return false
-  
-  // URLs - preserve as-is (loadstring, HttpGet need exact URLs)
-  if (/https?:\/\//.test(content)) return false
-  if (/\.com|\.net|\.org|\.gg|\.io|\.lua|\.txt/.test(content)) return false
-  
-  // Roblox-specific patterns that should not be touched
-  if (/github\.com|githubusercontent|pastebin|raw\.|gist\.|work\.ink/.test(content)) return false
-  
-  return true
-}
+// ==================== STRING TABLE BUILDER ====================
 
-// Build the obfuscated code using a string table approach (like WeAreDevs)
-function buildWithStringTable(tokens: Token[], encryptStrings: boolean): string {
-  const stringTable: string[] = []
-  const stringMap = new Map<string, number>() // content -> index
+function buildWithEncryptedStrings(tokens: Token[], useXor: boolean): string {
+  const stringTable: { original: string, decoded: string }[] = []
+  const stringMap = new Map<string, number>() // original value -> index
   
-  // First pass: collect all safe strings
-  if (encryptStrings) {
-    for (const token of tokens) {
-      if (token.type === 'string' && token.rawContent !== undefined) {
-        if (isSafeToEncode(token.rawContent) && !stringMap.has(token.rawContent)) {
-          stringMap.set(token.rawContent, stringTable.length)
-          stringTable.push(token.rawContent)
-        }
+  // Collect ALL strings (quoted and long strings)
+  for (const token of tokens) {
+    if (token.type === 'string' && token.rawContent !== undefined) {
+      if (!stringMap.has(token.value)) {
+        const decoded = decodeLuaString(token.rawContent)
+        stringMap.set(token.value, stringTable.length)
+        stringTable.push({ original: token.value, decoded })
+      }
+    } else if (token.type === 'longstring' && token.rawContent !== undefined) {
+      if (!stringMap.has(token.value)) {
+        // Long strings don't have escape processing in Lua
+        stringMap.set(token.value, stringTable.length)
+        stringTable.push({ original: token.value, decoded: token.rawContent })
       }
     }
   }
   
-  // If no strings to encrypt, just rebuild without comments
+  // If no strings, just rebuild without comments
   if (stringTable.length === 0) {
     let result = ''
     for (const token of tokens) {
@@ -205,26 +287,41 @@ function buildWithStringTable(tokens: Token[], encryptStrings: boolean): string 
     return result
   }
   
-  // Generate the string table with XOR decryption
   const tableVar = randVar()
   const decoderVar = randVar()
   const key = randInt(1, 200)
   
-  // Encode all strings with XOR + octal
-  const encodedStrings = stringTable.map(s => {
-    let encoded = ''
-    for (let i = 0; i < s.length; i++) {
-      const byte = s.charCodeAt(i) ^ key
-      encoded += byteToOctal(byte)
+  // Encode all strings
+  const encodedStrings = stringTable.map(({ decoded }) => {
+    const bytes = stringToUtf8Bytes(decoded)
+    if (useXor) {
+      // XOR each byte
+      const xored = bytes.map(b => (b ^ key) & 0xFF)
+      return '"' + xored.map(b => byteToLuaEscape(b)).join('') + '"'
+    } else {
+      // Just escape without XOR
+      return '"' + bytes.map(b => byteToLuaEscape(b)).join('') + '"'
     }
-    return '"' + encoded + '"'
   })
   
   // Build decoder function
-  const iVar = randVar()
-  const rVar = randVar()
-  const tVar = randVar()
-  const decoder = `local function ${decoderVar}(${tVar})local ${rVar}=""for ${iVar}=1,#${tVar} do ${rVar}=${rVar}..string.char(bit32.bxor(string.byte(${tVar},${iVar}),${key}))end return ${rVar} end`
+  let decoder: string
+  if (useXor) {
+    const iVar = randVar()
+    const rVar = randVar()
+    const tVar = randVar()
+    const bVar = randVar()
+    // Memoization: cache decoded strings
+    const cacheVar = randVar()
+    decoder = `local ${cacheVar}={};local function ${decoderVar}(${tVar},${iVar})if ${cacheVar}[${iVar}]then return ${cacheVar}[${iVar}]end;local ${rVar}="";for ${bVar}=1,#${tVar} do ${rVar}=${rVar}..string.char(bit32.bxor(string.byte(${tVar},${bVar}),${key}))end;${cacheVar}[${iVar}]=${rVar};return ${rVar} end`
+  } else {
+    const iVar = randVar()
+    const rVar = randVar()
+    const tVar = randVar()
+    const bVar = randVar()
+    const cacheVar = randVar()
+    decoder = `local ${cacheVar}={};local function ${decoderVar}(${tVar},${iVar})if ${cacheVar}[${iVar}]then return ${cacheVar}[${iVar}]end;local ${rVar}="";for ${bVar}=1,#${tVar} do ${rVar}=${rVar}..string.char(string.byte(${tVar},${bVar}))end;${cacheVar}[${iVar}]=${rVar};return ${rVar} end`
+  }
   
   // Build string table
   const tableDecl = `local ${tableVar}={${encodedStrings.join(',')}}`
@@ -234,9 +331,9 @@ function buildWithStringTable(tokens: Token[], encryptStrings: boolean): string 
   for (const token of tokens) {
     if (token.type === 'comment' || token.type === 'longcomment') continue
     
-    if (token.type === 'string' && token.rawContent !== undefined && stringMap.has(token.rawContent)) {
-      const idx = stringMap.get(token.rawContent)! + 1
-      codeBody += `${decoderVar}(${tableVar}[${idx}])`
+    if ((token.type === 'string' || token.type === 'longstring') && stringMap.has(token.value)) {
+      const idx = stringMap.get(token.value)! + 1
+      codeBody += `${decoderVar}(${tableVar}[${idx}],${idx})`
     } else {
       codeBody += token.value
     }
@@ -245,25 +342,8 @@ function buildWithStringTable(tokens: Token[], encryptStrings: boolean): string 
   return decoder + ';' + tableDecl + ';' + codeBody
 }
 
-// Simple octal encoding without XOR (faster, still hides content)
-function buildWithOctalStrings(tokens: Token[]): string {
-  let result = ''
-  
-  for (const token of tokens) {
-    if (token.type === 'comment' || token.type === 'longcomment') continue
-    
-    if (token.type === 'string' && token.rawContent !== undefined && isSafeToEncode(token.rawContent)) {
-      // Convert to octal format
-      result += '"' + stringToOctal(token.rawContent) + '"'
-    } else {
-      result += token.value
-    }
-  }
-  
-  return result
-}
+// ==================== JUNK CODE ====================
 
-// Generate junk code
 function generateJunk(count: number): string {
   const junks: string[] = []
   
@@ -278,7 +358,7 @@ function generateJunk(count: number): string {
       `local ${v1}=function()return ${n1} end`,
       `local ${v1}={${n1},${n2}}`,
       `local ${v1},${v2}=${n1},${n2}`,
-      `do local ${v1}=${n1}*${n2}-${n1}*${n2}end`,
+      `do local ${v1}=${n1}*${n2}-${n1}*${n2} end`,
     ]
     junks.push(patterns[randInt(0, patterns.length - 1)])
   }
@@ -286,7 +366,8 @@ function generateJunk(count: number): string {
   return shuffle(junks).join(';') + ';'
 }
 
-// Generate opaque predicate (always true)
+// ==================== OPAQUE PREDICATES ====================
+
 function generateOpaquePredicate(): string {
   const v1 = randVar()
   const v2 = randVar()
@@ -294,28 +375,32 @@ function generateOpaquePredicate(): string {
   const n2 = randInt(100, 999)
   const product = n1 * n2
   
-  return `local ${v1},${v2}=${n1},${n2};if ${v1}*${v2}~=${product} then return end;`
+  return `local ${v1},${v2}=${n1},${n2};if ${v1}*${v2}~=${product} then return nil end;`
 }
 
-// Environment check
+// ==================== ENVIRONMENT CHECK ====================
+
 function generateEnvCheck(): string {
   const t = randVar()
-  return `local ${t}=type;if ${t}(bit32)~="table"or ${t}(string)~="table"then return end;`
+  return `local ${t}=type;if ${t}(bit32)~="table"or ${t}(string)~="table"then return nil end;`
 }
 
-// Wrap in function
-function wrapInFunction(code: string, layers: number): string {
+// ==================== WRAPPER (IIFE - no top-level return) ====================
+
+function wrapInIIFE(code: string): string {
+  return `(function()${code} end)()`
+}
+
+function wrapMultipleLayers(code: string, layers: number): string {
   let result = code
-  
   for (let i = 0; i < layers; i++) {
-    const fn = randVar()
-    result = `local ${fn}=(function()${result} end);return ${fn}()`
+    result = wrapInIIFE(result)
   }
-  
   return result
 }
 
-// Minify - carefully preserve string contents
+// ==================== MINIFIER ====================
+
 function minify(code: string): string {
   const tokens = tokenize(code)
   let result = ''
@@ -325,17 +410,14 @@ function minify(code: string): string {
     if (token.type === 'comment' || token.type === 'longcomment') continue
     
     if (token.type === 'code') {
-      // Process whitespace in code sections
       let processed = ''
       let i = 0
       while (i < token.value.length) {
         const c = token.value[i]
         
         if (/\s/.test(c)) {
-          // Collapse whitespace
           while (i < token.value.length && /\s/.test(token.value[i])) i++
           
-          // Keep single space if needed between identifiers
           const prev = processed[processed.length - 1] || lastChar
           const next = token.value[i] || ''
           if (/[a-zA-Z0-9_]/.test(prev) && /[a-zA-Z0-9_]/.test(next)) {
@@ -349,7 +431,6 @@ function minify(code: string): string {
       result += processed
       if (processed.length > 0) lastChar = processed[processed.length - 1]
     } else {
-      // Strings and long strings - keep as-is
       result += token.value
       if (token.value.length > 0) lastChar = token.value[token.value.length - 1]
     }
@@ -358,93 +439,28 @@ function minify(code: string): string {
   return result.trim()
 }
 
-// Rename local variables (conservative - only simple patterns)
-function renameLocals(code: string): string {
-  // Find variable declarations and function parameters
-  const declarations = new Map<string, string>()
-  
-  // Reserved Lua and Roblox identifiers
-  const reserved = new Set([
-    'and', 'break', 'do', 'else', 'elseif', 'end', 'false', 'for', 'function',
-    'goto', 'if', 'in', 'local', 'nil', 'not', 'or', 'repeat', 'return', 'then',
-    'true', 'until', 'while', 'self',
-    // Roblox globals
-    'game', 'workspace', 'script', 'plugin', 'shared', 'Instance', 'Vector3', 
-    'Vector2', 'CFrame', 'Color3', 'BrickColor', 'UDim', 'UDim2', 'Rect', 
-    'Ray', 'Region3', 'Faces', 'Axes', 'Enum', 'TweenInfo', 'NumberRange',
-    'NumberSequence', 'ColorSequence', 'PhysicalProperties', 'Random',
-    // Built-in functions
-    'pairs', 'ipairs', 'next', 'print', 'warn', 'error', 'assert', 'type',
-    'typeof', 'tostring', 'tonumber', 'select', 'unpack', 'pack', 'pcall',
-    'xpcall', 'require', 'loadstring', 'load', 'getfenv', 'setfenv',
-    'rawget', 'rawset', 'rawequal', 'setmetatable', 'getmetatable',
-    'collectgarbage', 'newproxy', 'coroutine', 'debug', 'os', 'table',
-    'string', 'math', 'bit32', 'utf8', 'task', 'delay', 'spawn', 'wait',
-    'tick', 'time', 'elapsedTime', 'gcinfo', 'stats', 'settings', 'version',
-    // Common Roblox service names that might be used
-    'Players', 'RunService', 'TweenService', 'UserInputService', 'StarterGui',
-    'ReplicatedStorage', 'ServerStorage', 'Workspace', 'Lighting',
-  ])
-  
-  // Pattern to find local variable declarations: local name = or local name,name2 =
-  const localDeclPattern = /\blocal\s+([a-zA-Z_][a-zA-Z0-9_]*)/g
-  let match
-  
-  while ((match = localDeclPattern.exec(code)) !== null) {
-    const name = match[1]
-    if (!reserved.has(name) && !declarations.has(name) && name.length > 1) {
-      declarations.set(name, randVar())
-    }
-  }
-  
-  // Pattern for function parameters: function name(param1, param2)
-  const funcParamPattern = /function\s*[a-zA-Z_]*\s*\(([^)]*)\)/g
-  while ((match = funcParamPattern.exec(code)) !== null) {
-    const params = match[1].split(',').map(p => p.trim())
-    for (const param of params) {
-      const paramName = param.split(':')[0].trim() // Handle type annotations
-      if (paramName && !reserved.has(paramName) && !declarations.has(paramName) && paramName.length > 1) {
-        declarations.set(paramName, randVar())
-      }
-    }
-  }
-  
-  // Replace all occurrences
-  let result = code
-  for (const [original, renamed] of declarations) {
-    // Word boundary replacement - be careful with patterns
-    const regex = new RegExp(`\\b${original}\\b`, 'g')
-    result = result.replace(regex, renamed)
-  }
-  
-  return result
-}
+// ==================== MAIN OBFUSCATION ====================
 
-// Main obfuscation function
 export async function obfuscateCode(code: string, settings: ObfuscationSettings): Promise<ObfuscationResult> {
   let result = code
   let steps = 0
   
-  // Tokenize the code
   const tokens = tokenize(result)
   
   if (settings.preset === 'Low') {
-    // Low: Just octal strings + junk + simple wrap
-    result = buildWithOctalStrings(tokens)
+    // Low: Encrypted strings (no XOR) + junk + 1 layer
+    result = buildWithEncryptedStrings(tokens, false)
     steps++
     
     result = generateJunk(3) + result
     steps++
     
-    result = wrapInFunction(result, 1)
+    result = wrapInIIFE(result)
     steps++
     
   } else if (settings.preset === 'Medium') {
-    // Medium: XOR string table + rename + junk + wrap
-    result = buildWithStringTable(tokens, true)
-    steps++
-    
-    result = renameLocals(result)
+    // Medium: XOR encrypted strings + junk + env check + 2 layers
+    result = buildWithEncryptedStrings(tokens, true)
     steps++
     
     result = generateJunk(5) + result
@@ -453,15 +469,12 @@ export async function obfuscateCode(code: string, settings: ObfuscationSettings)
     result = generateEnvCheck() + result
     steps++
     
-    result = wrapInFunction(result, 2)
+    result = wrapMultipleLayers(result, 2)
     steps++
     
   } else if (settings.preset === 'High') {
-    // High: Everything + opaque predicates + more layers
-    result = buildWithStringTable(tokens, true)
-    steps++
-    
-    result = renameLocals(result)
+    // High: XOR + opaque predicates + more junk + 3 layers
+    result = buildWithEncryptedStrings(tokens, true)
     steps++
     
     result = generateJunk(6) + result
@@ -473,21 +486,18 @@ export async function obfuscateCode(code: string, settings: ObfuscationSettings)
     result = generateEnvCheck() + result
     steps++
     
-    result = wrapInFunction(result, 2)
+    result = wrapMultipleLayers(result, 2)
     steps++
     
     result = generateJunk(4) + result
     steps++
     
-    result = wrapInFunction(result, 1)
+    result = wrapInIIFE(result)
     steps++
     
   } else if (settings.preset === 'Maximum') {
-    // Maximum: Maximum protection
-    result = buildWithStringTable(tokens, true)
-    steps++
-    
-    result = renameLocals(result)
+    // Maximum: Everything + more layers
+    result = buildWithEncryptedStrings(tokens, true)
     steps++
     
     result = generateJunk(8) + result
@@ -499,7 +509,7 @@ export async function obfuscateCode(code: string, settings: ObfuscationSettings)
     result = generateEnvCheck() + result
     steps++
     
-    result = wrapInFunction(result, 2)
+    result = wrapMultipleLayers(result, 2)
     steps++
     
     result = generateJunk(5) + result
@@ -508,10 +518,13 @@ export async function obfuscateCode(code: string, settings: ObfuscationSettings)
     result = generateOpaquePredicate() + result
     steps++
     
-    result = wrapInFunction(result, 2)
+    result = wrapMultipleLayers(result, 2)
     steps++
     
     result = generateJunk(4) + result
+    steps++
+    
+    result = wrapInIIFE(result)
     steps++
   }
   
