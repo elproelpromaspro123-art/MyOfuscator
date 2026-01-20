@@ -10,7 +10,7 @@ export interface ObfuscationResult {
 // ==================== UTILITIES ====================
 
 const ALPHA = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
-const randVar = () => '_' + Array.from({ length: 12 }, () => ALPHA[Math.floor(Math.random() * 52)]).join('')
+const randVar = () => '_' + Array.from({ length: 14 }, () => ALPHA[Math.floor(Math.random() * 52)]).join('')
 const randInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min
 
 function shuffle<T>(arr: T[]): T[] {
@@ -23,8 +23,6 @@ function shuffle<T>(arr: T[]): T[] {
 }
 
 // ==================== LUA STRING DECODING ====================
-// Decode Lua escape sequences to actual characters
-// e.g. "\\n" (2 chars in source) -> "\n" (1 char newline)
 
 function decodeLuaString(content: string): string {
   let result = ''
@@ -52,7 +50,6 @@ function decodeLuaString(content: string): string {
           if (content[i] === '\n') i++
           break
         case 'x':
-          // Hex escape \xNN
           if (i + 3 < content.length) {
             const hex = content.slice(i + 2, i + 4)
             const code = parseInt(hex, 16)
@@ -66,12 +63,10 @@ function decodeLuaString(content: string): string {
           i++
           break
         case 'z':
-          // \z skips following whitespace
           i += 2
           while (i < content.length && /\s/.test(content[i])) i++
           break
         default:
-          // Decimal escape \ddd (1-3 digits)
           if (/\d/.test(next)) {
             let numStr = ''
             let j = i + 1
@@ -88,7 +83,6 @@ function decodeLuaString(content: string): string {
               i++
             }
           } else {
-            // Unknown escape, keep as-is
             result += content[i]
             i++
           }
@@ -103,25 +97,32 @@ function decodeLuaString(content: string): string {
 }
 
 // ==================== UTF-8 ENCODING ====================
-// Convert string to UTF-8 bytes (handles all unicode correctly)
 
 function stringToUtf8Bytes(str: string): number[] {
   const encoder = new TextEncoder()
   return Array.from(encoder.encode(str))
 }
 
-// ==================== OCTAL ENCODING ====================
-// Convert byte (0-255) to 3-digit decimal escape \ddd (Lua uses decimal, not octal!)
-
 function byteToLuaEscape(byte: number): string {
-  // Lua uses DECIMAL escapes \ddd, not octal!
   return '\\' + byte.toString(10).padStart(3, '0')
 }
 
-// Encode a string as Lua decimal escapes
-function stringToLuaEscapes(str: string): string {
-  const bytes = stringToUtf8Bytes(str)
-  return bytes.map(b => byteToLuaEscape(b)).join('')
+// ==================== ADVANCED ENCRYPTION ====================
+
+// Multi-key rolling XOR encryption
+function encryptBytesAdvanced(bytes: number[], keys: number[]): number[] {
+  return bytes.map((b, i) => {
+    let result = b
+    for (let k = 0; k < keys.length; k++) {
+      result = (result ^ keys[(i + k) % keys.length]) & 0xFF
+    }
+    return result
+  })
+}
+
+// Generate random keys
+function generateKeys(count: number): number[] {
+  return Array.from({ length: count }, () => randInt(1, 250))
 }
 
 // ==================== TOKENIZER ====================
@@ -132,7 +133,7 @@ interface Token {
   start: number
   end: number
   quote?: string
-  rawContent?: string // Content between quotes (with escapes as-is from source)
+  rawContent?: string
 }
 
 function tokenize(code: string): Token[] {
@@ -142,17 +143,7 @@ function tokenize(code: string): Token[] {
   while (i < code.length) {
     const start = i
     
-    // Long comment --[[...]]
-    if (code.slice(i, i + 4) === '--[[') {
-      let j = i + 4
-      while (j < code.length - 1 && !(code[j] === ']' && code[j + 1] === ']')) j++
-      j += 2
-      tokens.push({ type: 'longcomment', value: code.slice(start, j), start, end: j })
-      i = j
-      continue
-    }
-    
-    // Long comment with equals --[=[...]=]
+    // Long comment --[[...]] or --[=[...]=]
     if (code.slice(i, i + 3) === '--[') {
       let eqCount = 0
       let j = i + 3
@@ -256,11 +247,11 @@ function tokenize(code: string): Token[] {
 
 // ==================== STRING TABLE BUILDER ====================
 
-function buildWithEncryptedStrings(tokens: Token[], useXor: boolean): string {
+function buildWithEncryptedStrings(tokens: Token[], level: number): string {
   const stringTable: { original: string, decoded: string }[] = []
-  const stringMap = new Map<string, number>() // original value -> index
+  const stringMap = new Map<string, number>()
   
-  // Collect ALL strings (quoted and long strings)
+  // Collect ALL strings
   for (const token of tokens) {
     if (token.type === 'string' && token.rawContent !== undefined) {
       if (!stringMap.has(token.value)) {
@@ -270,7 +261,6 @@ function buildWithEncryptedStrings(tokens: Token[], useXor: boolean): string {
       }
     } else if (token.type === 'longstring' && token.rawContent !== undefined) {
       if (!stringMap.has(token.value)) {
-        // Long strings don't have escape processing in Lua
         stringMap.set(token.value, stringTable.length)
         stringTable.push({ original: token.value, decoded: token.rawContent })
       }
@@ -289,38 +279,85 @@ function buildWithEncryptedStrings(tokens: Token[], useXor: boolean): string {
   
   const tableVar = randVar()
   const decoderVar = randVar()
-  const key = randInt(1, 200)
+  const cacheVar = randVar()
   
-  // Encode all strings
-  const encodedStrings = stringTable.map(({ decoded }) => {
-    const bytes = stringToUtf8Bytes(decoded)
-    if (useXor) {
-      // XOR each byte
-      const xored = bytes.map(b => (b ^ key) & 0xFF)
-      return '"' + xored.map(b => byteToLuaEscape(b)).join('') + '"'
-    } else {
-      // Just escape without XOR
-      return '"' + bytes.map(b => byteToLuaEscape(b)).join('') + '"'
-    }
-  })
-  
-  // Build decoder function
   let decoder: string
-  if (useXor) {
+  let encodedStrings: string[]
+  
+  if (level === 1) {
+    // Level 1: Simple byte encoding (no XOR)
+    encodedStrings = stringTable.map(({ decoded }) => {
+      const bytes = stringToUtf8Bytes(decoded)
+      return '"' + bytes.map(b => byteToLuaEscape(b)).join('') + '"'
+    })
+    
     const iVar = randVar()
     const rVar = randVar()
     const tVar = randVar()
     const bVar = randVar()
-    // Memoization: cache decoded strings
-    const cacheVar = randVar()
-    decoder = `local ${cacheVar}={};local function ${decoderVar}(${tVar},${iVar})if ${cacheVar}[${iVar}]then return ${cacheVar}[${iVar}]end;local ${rVar}="";for ${bVar}=1,#${tVar} do ${rVar}=${rVar}..string.char(bit32.bxor(string.byte(${tVar},${bVar}),${key}))end;${cacheVar}[${iVar}]=${rVar};return ${rVar} end`
-  } else {
-    const iVar = randVar()
-    const rVar = randVar()
-    const tVar = randVar()
-    const bVar = randVar()
-    const cacheVar = randVar()
     decoder = `local ${cacheVar}={};local function ${decoderVar}(${tVar},${iVar})if ${cacheVar}[${iVar}]then return ${cacheVar}[${iVar}]end;local ${rVar}="";for ${bVar}=1,#${tVar} do ${rVar}=${rVar}..string.char(string.byte(${tVar},${bVar}))end;${cacheVar}[${iVar}]=${rVar};return ${rVar} end`
+    
+  } else if (level === 2) {
+    // Level 2: Single key XOR
+    const key = randInt(1, 200)
+    encodedStrings = stringTable.map(({ decoded }) => {
+      const bytes = stringToUtf8Bytes(decoded)
+      const encrypted = bytes.map(b => (b ^ key) & 0xFF)
+      return '"' + encrypted.map(b => byteToLuaEscape(b)).join('') + '"'
+    })
+    
+    const iVar = randVar()
+    const rVar = randVar()
+    const tVar = randVar()
+    const bVar = randVar()
+    decoder = `local ${cacheVar}={};local function ${decoderVar}(${tVar},${iVar})if ${cacheVar}[${iVar}]then return ${cacheVar}[${iVar}]end;local ${rVar}="";for ${bVar}=1,#${tVar} do ${rVar}=${rVar}..string.char(bit32.bxor(string.byte(${tVar},${bVar}),${key}))end;${cacheVar}[${iVar}]=${rVar};return ${rVar} end`
+    
+  } else if (level === 3) {
+    // Level 3: Multi-key rolling XOR (2 keys)
+    const keys = generateKeys(2)
+    encodedStrings = stringTable.map(({ decoded }) => {
+      const bytes = stringToUtf8Bytes(decoded)
+      const encrypted = encryptBytesAdvanced(bytes, keys)
+      return '"' + encrypted.map(b => byteToLuaEscape(b)).join('') + '"'
+    })
+    
+    const iVar = randVar()
+    const rVar = randVar()
+    const tVar = randVar()
+    const bVar = randVar()
+    const kVar = randVar()
+    const k1 = keys[0], k2 = keys[1]
+    decoder = `local ${cacheVar}={};local ${kVar}={${k1},${k2}};local function ${decoderVar}(${tVar},${iVar})if ${cacheVar}[${iVar}]then return ${cacheVar}[${iVar}]end;local ${rVar}="";for ${bVar}=1,#${tVar} do local c=string.byte(${tVar},${bVar});c=bit32.bxor(c,${kVar}[((${bVar}-1)%2)+1]);c=bit32.bxor(c,${kVar}[((${bVar})%2)+1]);${rVar}=${rVar}..string.char(c)end;${cacheVar}[${iVar}]=${rVar};return ${rVar} end`
+    
+  } else {
+    // Level 4: Multi-key rolling XOR (3 keys) + shuffle
+    const keys = generateKeys(3)
+    const shuffledIndices = shuffle(stringTable.map((_, i) => i))
+    const indexMap = new Map<number, number>()
+    shuffledIndices.forEach((origIdx, newIdx) => indexMap.set(origIdx, newIdx))
+    
+    const shuffledStrings = shuffledIndices.map(i => stringTable[i])
+    encodedStrings = shuffledStrings.map(({ decoded }) => {
+      const bytes = stringToUtf8Bytes(decoded)
+      const encrypted = encryptBytesAdvanced(bytes, keys)
+      return '"' + encrypted.map(b => byteToLuaEscape(b)).join('') + '"'
+    })
+    
+    // Update stringMap to use shuffled indices
+    const newStringMap = new Map<string, number>()
+    for (const [key, origIdx] of stringMap) {
+      newStringMap.set(key, indexMap.get(origIdx)!)
+    }
+    stringMap.clear()
+    for (const [k, v] of newStringMap) stringMap.set(k, v)
+    
+    const iVar = randVar()
+    const rVar = randVar()
+    const tVar = randVar()
+    const bVar = randVar()
+    const kVar = randVar()
+    const k1 = keys[0], k2 = keys[1], k3 = keys[2]
+    decoder = `local ${cacheVar}={};local ${kVar}={${k1},${k2},${k3}};local function ${decoderVar}(${tVar},${iVar})if ${cacheVar}[${iVar}]then return ${cacheVar}[${iVar}]end;local ${rVar}="";for ${bVar}=1,#${tVar} do local c=string.byte(${tVar},${bVar});c=bit32.bxor(c,${kVar}[((${bVar}-1)%3)+1]);c=bit32.bxor(c,${kVar}[((${bVar})%3)+1]);c=bit32.bxor(c,${kVar}[((${bVar}+1)%3)+1]);${rVar}=${rVar}..string.char(c)end;${cacheVar}[${iVar}]=${rVar};return ${rVar} end`
   }
   
   // Build string table
@@ -342,50 +379,110 @@ function buildWithEncryptedStrings(tokens: Token[], useXor: boolean): string {
   return decoder + ';' + tableDecl + ';' + codeBody
 }
 
-// ==================== JUNK CODE ====================
+// ==================== JUNK CODE (ENHANCED) ====================
 
-function generateJunk(count: number): string {
+function generateJunk(count: number, complexity: number = 1): string {
   const junks: string[] = []
   
   for (let i = 0; i < count; i++) {
     const v1 = randVar()
     const v2 = randVar()
+    const v3 = randVar()
     const n1 = randInt(10000, 999999)
     const n2 = randInt(100, 9999)
+    const n3 = randInt(1, 99)
     
-    const patterns = [
+    const simplePatterns = [
       `local ${v1}=${n1}`,
       `local ${v1}=function()return ${n1} end`,
       `local ${v1}={${n1},${n2}}`,
       `local ${v1},${v2}=${n1},${n2}`,
-      `do local ${v1}=${n1}*${n2}-${n1}*${n2} end`,
     ]
+    
+    const complexPatterns = [
+      `local ${v1}=${n1};local ${v2}=${v1}*${n3}-${v1}*${n3}`,
+      `local ${v1}=function(${v2})return ${v2} and ${n1} or ${n2} end`,
+      `local ${v1}={${randVar()}=${n1},${randVar()}=${n2}}`,
+      `local ${v1}=(function()return ${n1} end)()`,
+      `do local ${v1}=${n1};local ${v2}=${v1}+${n2}-${n2}end`,
+      `local ${v1}=bit32.bxor(${n1},${n2});${v1}=bit32.bxor(${v1},${n2})`,
+      `local ${v1}={};for ${v2}=1,${n3} do ${v1}[${v2}]=${n1} end`,
+    ]
+    
+    const advancedPatterns = [
+      `local ${v1},${v2},${v3}=${n1},${n2},${n3};if ${v1}*${v2}~=${n1*n2} then ${v3}=${v1} end`,
+      `local ${v1}=(function(${v2})local ${v3}=${v2}*${n3};return ${v3}-${v2}*${n3} end)(${n1})`,
+      `local ${v1}={};local ${v2}=function(x)${v1}[#${v1}+1]=x end;${v2}(${n1})`,
+      `local ${v1}=string.rep("",${n3});local ${v2}=#${v1}+${n1}`,
+      `local ${v1}=math.floor(${n1}/${n2})*${n2};local ${v2}=${n1}-${v1}`,
+    ]
+    
+    let patterns = simplePatterns
+    if (complexity >= 2) patterns = [...patterns, ...complexPatterns]
+    if (complexity >= 3) patterns = [...patterns, ...advancedPatterns]
+    
     junks.push(patterns[randInt(0, patterns.length - 1)])
   }
   
   return shuffle(junks).join(';') + ';'
 }
 
-// ==================== OPAQUE PREDICATES ====================
+// ==================== OPAQUE PREDICATES (ENHANCED) ====================
 
-function generateOpaquePredicate(): string {
+function generateOpaquePredicate(complexity: number = 1): string {
   const v1 = randVar()
   const v2 = randVar()
+  const v3 = randVar()
   const n1 = randInt(1000, 9999)
   const n2 = randInt(100, 999)
-  const product = n1 * n2
   
-  return `local ${v1},${v2}=${n1},${n2};if ${v1}*${v2}~=${product} then return nil end;`
+  if (complexity === 1) {
+    const product = n1 * n2
+    return `local ${v1},${v2}=${n1},${n2};if ${v1}*${v2}~=${product} then return nil end;`
+  } else if (complexity === 2) {
+    const sum = n1 + n2
+    const product = n1 * n2
+    return `local ${v1},${v2}=${n1},${n2};if ${v1}+${v2}~=${sum} or ${v1}*${v2}~=${product} then return nil end;`
+  } else {
+    const diff = n1 - n2
+    const sum = n1 + n2
+    const xorVal = n1 ^ n2
+    return `local ${v1},${v2},${v3}=${n1},${n2},${diff};if ${v1}-${v2}~=${v3} or bit32.bxor(${v1},${v2})~=${xorVal} then return nil end;`
+  }
 }
 
-// ==================== ENVIRONMENT CHECK ====================
+// ==================== ENVIRONMENT CHECK (ENHANCED) ====================
 
-function generateEnvCheck(): string {
+function generateEnvCheck(complexity: number = 1): string {
   const t = randVar()
-  return `local ${t}=type;if ${t}(bit32)~="table"or ${t}(string)~="table"then return nil end;`
+  
+  if (complexity === 1) {
+    return `local ${t}=type;if ${t}(bit32)~="table"or ${t}(string)~="table"then return nil end;`
+  } else if (complexity === 2) {
+    return `local ${t}=type;if ${t}(bit32)~="table"or ${t}(string)~="table"or ${t}(math)~="table"or ${t}(table)~="table"then return nil end;`
+  } else {
+    const checks = [
+      `${t}(bit32)=="table"`,
+      `${t}(string)=="table"`,
+      `${t}(math)=="table"`,
+      `${t}(table)=="table"`,
+      `${t}(pcall)=="function"`,
+      `${t}(pairs)=="function"`,
+    ]
+    return `local ${t}=type;if not(${shuffle(checks).slice(0, 4).join(" and ")})then return nil end;`
+  }
 }
 
-// ==================== WRAPPER (IIFE - no top-level return) ====================
+// ==================== ANTI-TAMPER ====================
+
+function generateAntiTamper(): string {
+  const v1 = randVar()
+  const v2 = randVar()
+  const n = randInt(100000, 999999)
+  return `local ${v1}=${n};local ${v2}=tostring(${v1});if #${v2}~=6 then return nil end;`
+}
+
+// ==================== WRAPPER (IIFE) ====================
 
 function wrapInIIFE(code: string): string {
   return `(function()${code} end)()`
@@ -397,6 +494,18 @@ function wrapMultipleLayers(code: string, layers: number): string {
     result = wrapInIIFE(result)
   }
   return result
+}
+
+// ==================== CONTROL FLOW ====================
+
+function addControlFlow(code: string): string {
+  const stateVar = randVar()
+  const runVar = randVar()
+  const state1 = randInt(1000, 9999)
+  const state2 = randInt(10000, 99999)
+  const stateFinal = randInt(100000, 999999)
+  
+  return `local ${stateVar}=${state1};local ${runVar}=true;while ${runVar} do if ${stateVar}==${state1} then ${stateVar}=${state2} elseif ${stateVar}==${state2} then ${code};${stateVar}=${stateFinal} elseif ${stateVar}==${stateFinal} then ${runVar}=false end end`
 }
 
 // ==================== MINIFIER ====================
@@ -448,80 +557,98 @@ export async function obfuscateCode(code: string, settings: ObfuscationSettings)
   const tokens = tokenize(result)
   
   if (settings.preset === 'Low') {
-    // Low: Encrypted strings (no XOR) + junk + 1 layer
-    result = buildWithEncryptedStrings(tokens, false)
+    // Low: Basic encryption + junk + 1 layer
+    result = buildWithEncryptedStrings(tokens, 1)
     steps++
     
-    result = generateJunk(3) + result
+    result = generateJunk(4, 1) + result
     steps++
     
     result = wrapInIIFE(result)
     steps++
     
   } else if (settings.preset === 'Medium') {
-    // Medium: XOR encrypted strings + junk + env check + 2 layers
-    result = buildWithEncryptedStrings(tokens, true)
+    // Medium: XOR encryption + junk + env check + 2 layers
+    result = buildWithEncryptedStrings(tokens, 2)
     steps++
     
-    result = generateJunk(5) + result
+    result = generateJunk(6, 2) + result
     steps++
     
-    result = generateEnvCheck() + result
+    result = generateEnvCheck(1) + result
+    steps++
+    
+    result = generateOpaquePredicate(1) + result
     steps++
     
     result = wrapMultipleLayers(result, 2)
     steps++
     
   } else if (settings.preset === 'High') {
-    // High: XOR + opaque predicates + more junk + 3 layers
-    result = buildWithEncryptedStrings(tokens, true)
+    // High: Multi-key XOR + control flow + more layers
+    result = buildWithEncryptedStrings(tokens, 3)
     steps++
     
-    result = generateJunk(6) + result
+    result = generateJunk(8, 2) + result
     steps++
     
-    result = generateOpaquePredicate() + result
+    result = generateOpaquePredicate(2) + result
     steps++
     
-    result = generateEnvCheck() + result
+    result = generateEnvCheck(2) + result
     steps++
     
     result = wrapMultipleLayers(result, 2)
     steps++
     
-    result = generateJunk(4) + result
+    result = generateJunk(5, 2) + result
+    steps++
+    
+    result = generateAntiTamper() + result
+    steps++
+    
+    result = addControlFlow(result)
     steps++
     
     result = wrapInIIFE(result)
     steps++
     
   } else if (settings.preset === 'Maximum') {
-    // Maximum: Everything + more layers
-    result = buildWithEncryptedStrings(tokens, true)
+    // Maximum: Everything maxed out
+    result = buildWithEncryptedStrings(tokens, 4)
     steps++
     
-    result = generateJunk(8) + result
+    result = generateJunk(10, 3) + result
     steps++
     
-    result = generateOpaquePredicate() + result
+    result = generateOpaquePredicate(3) + result
     steps++
     
-    result = generateEnvCheck() + result
-    steps++
-    
-    result = wrapMultipleLayers(result, 2)
-    steps++
-    
-    result = generateJunk(5) + result
-    steps++
-    
-    result = generateOpaquePredicate() + result
+    result = generateEnvCheck(3) + result
     steps++
     
     result = wrapMultipleLayers(result, 2)
     steps++
     
-    result = generateJunk(4) + result
+    result = generateJunk(6, 3) + result
+    steps++
+    
+    result = generateAntiTamper() + result
+    steps++
+    
+    result = generateOpaquePredicate(2) + result
+    steps++
+    
+    result = addControlFlow(result)
+    steps++
+    
+    result = wrapMultipleLayers(result, 2)
+    steps++
+    
+    result = generateJunk(5, 2) + result
+    steps++
+    
+    result = generateOpaquePredicate(1) + result
     steps++
     
     result = wrapInIIFE(result)

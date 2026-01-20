@@ -11,8 +11,11 @@ import { obfuscateCode, ObfuscationSettings } from '@/lib/obfuscator'
 const CodeEditor = dynamic(() => import('@/components/CodeEditor'), { 
   ssr: false,
   loading: () => (
-    <div className="h-[400px] bg-zinc-900 rounded-lg flex items-center justify-center">
-      <div className="text-zinc-500">Loading editor...</div>
+    <div className="h-[350px] bg-[#0f0f12] rounded-xl flex items-center justify-center">
+      <div className="flex items-center gap-3 text-zinc-500">
+        <div className="spinner"></div>
+        <span>Loading editor...</span>
+      </div>
     </div>
   )
 })
@@ -37,7 +40,7 @@ export default function Home() {
 
   const handleObfuscate = useCallback(async () => {
     if (!input.trim()) {
-      setError('Enter some code first')
+      setError('Please enter some code to obfuscate')
       return
     }
     setLoading(true)
@@ -53,7 +56,7 @@ export default function Home() {
         stepsApplied: result.stepsApplied,
       })
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error')
+      setError(e instanceof Error ? e.message : 'An error occurred')
       setOutput('')
     } finally {
       setLoading(false)
@@ -77,44 +80,68 @@ export default function Home() {
   }, [output])
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-grid">
       <Header />
       
-      <main className="flex-1 container mx-auto px-4 py-8 max-w-6xl">
-        {/* Hero */}
-        <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold mb-3">Lua Obfuscator</h1>
-          <p className="text-zinc-400 text-lg max-w-2xl mx-auto">
-            Protect your Roblox scripts with executor-compatible obfuscation.
-            Works with Delta, Velocity, Xeno, and more.
-          </p>
+      {/* Hero Section */}
+      <section className="relative overflow-hidden">
+        <div className="absolute inset-0 bg-radial pointer-events-none"></div>
+        <div className="container mx-auto px-4 pt-16 pb-8 max-w-6xl relative">
+          <div className="text-center mb-12">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#151519] border border-[#1f1f28] text-sm text-zinc-400 mb-6">
+              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+              Now with Multi-Key Encryption
+            </div>
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-4">
+              <span className="gradient-text">Professional Lua</span>
+              <br />
+              Obfuscator
+            </h1>
+            <p className="text-lg text-zinc-400 max-w-2xl mx-auto leading-relaxed">
+              Protect your Roblox scripts with military-grade encryption.
+              Compatible with Delta, Velocity, Xeno, and all modern executors.
+            </p>
+          </div>
         </div>
+      </section>
 
-        {/* Editor Section */}
-        <div className="grid lg:grid-cols-4 gap-6 mb-16">
-          <div className="lg:col-span-1">
+      {/* Main Editor Section */}
+      <main className="container mx-auto px-4 pb-16 max-w-6xl">
+        <div className="grid lg:grid-cols-[320px_1fr] gap-6">
+          {/* Settings */}
+          <div className="lg:sticky lg:top-24 lg:self-start">
             <SettingsPanel settings={settings} onChange={setSettings} />
           </div>
 
-          <div className="lg:col-span-3 space-y-4">
+          {/* Editor Area */}
+          <div className="space-y-4">
+            {/* Input Editor */}
             <div className="editor-wrapper">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
-                <span className="text-sm text-zinc-400">Input</span>
-                <span className="text-xs text-zinc-600">{input.length} chars</span>
+              <div className="flex items-center justify-between px-5 py-4 border-b border-[#1f1f28]">
+                <div className="flex items-center gap-3">
+                  <div className="flex gap-1.5">
+                    <div className="w-3 h-3 rounded-full bg-[#ef4444]"></div>
+                    <div className="w-3 h-3 rounded-full bg-[#eab308]"></div>
+                    <div className="w-3 h-3 rounded-full bg-[#22c55e]"></div>
+                  </div>
+                  <span className="text-sm text-zinc-400 font-medium">Input</span>
+                </div>
+                <span className="text-xs text-zinc-600 font-mono">{input.length} chars</span>
               </div>
               <CodeEditor
                 value={input}
                 onChange={(v) => setInput(v || '')}
                 language="lua"
-                height="280px"
+                height="350px"
               />
             </div>
 
-            <div className="flex justify-center">
+            {/* Obfuscate Button */}
+            <div className="flex justify-center py-2">
               <button
                 onClick={handleObfuscate}
                 disabled={loading}
-                className="btn-primary flex items-center gap-2 px-8"
+                className="btn-primary flex items-center gap-3 px-10 py-4 text-base"
               >
                 {loading ? (
                   <>
@@ -122,29 +149,53 @@ export default function Home() {
                     <span>Processing...</span>
                   </>
                 ) : (
-                  <span>Obfuscate</span>
+                  <>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                    <span>Obfuscate Code</span>
+                  </>
                 )}
               </button>
             </div>
 
+            {/* Error */}
             {error && (
-              <div className="card p-4 border-red-900 bg-red-950/30 text-red-400 text-sm fade-in">
+              <div className="card p-4 border-red-900/50 bg-red-950/20 text-red-400 text-sm fade-in flex items-center gap-3">
+                <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
                 {error}
               </div>
             )}
 
+            {/* Output */}
             {output && (
               <>
                 <StatsPanel stats={stats} />
                 
                 <div className="editor-wrapper fade-in">
-                  <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
-                    <span className="text-sm text-zinc-400">Output</span>
+                  <div className="flex items-center justify-between px-5 py-4 border-b border-[#1f1f28]">
+                    <div className="flex items-center gap-3">
+                      <div className="flex gap-1.5">
+                        <div className="w-3 h-3 rounded-full bg-[#ef4444]"></div>
+                        <div className="w-3 h-3 rounded-full bg-[#eab308]"></div>
+                        <div className="w-3 h-3 rounded-full bg-[#22c55e]"></div>
+                      </div>
+                      <span className="text-sm text-zinc-400 font-medium">Output</span>
+                      <span className="badge badge-success">Obfuscated</span>
+                    </div>
                     <div className="flex gap-2">
-                      <button onClick={handleCopy} className="btn-secondary text-xs py-2 px-3">
+                      <button onClick={handleCopy} className="btn-secondary text-xs py-2 px-4 flex items-center gap-2">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
                         Copy
                       </button>
-                      <button onClick={handleDownload} className="btn-secondary text-xs py-2 px-3">
+                      <button onClick={handleDownload} className="btn-secondary text-xs py-2 px-4 flex items-center gap-2">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
                         Download
                       </button>
                     </div>
@@ -152,7 +203,7 @@ export default function Home() {
                   <CodeEditor
                     value={output}
                     language="lua"
-                    height="280px"
+                    height="350px"
                     readOnly
                   />
                 </div>
@@ -160,108 +211,187 @@ export default function Home() {
             )}
           </div>
         </div>
+      </main>
 
-        {/* Why Section */}
-        <section className="mb-16">
-          <h2 className="text-2xl font-bold text-center mb-8">Why Prometheus?</h2>
-          <div className="grid md:grid-cols-3 gap-6">
-            <div className="card p-6">
-              <div className="text-blue-400 text-2xl mb-3">⚡</div>
-              <h3 className="font-semibold mb-2">Executor Compatible</h3>
-              <p className="text-sm text-zinc-400">
-                Built specifically for modern executors. Uses bit32 operations and avoids 
-                sandboxed functions like loadstring in the output.
-              </p>
-            </div>
-            <div className="card p-6">
-              <div className="text-blue-400 text-2xl mb-3">🛡️</div>
-              <h3 className="font-semibold mb-2">Smart String Protection</h3>
-              <p className="text-sm text-zinc-400">
-                Encrypts strings while preserving URLs, escape sequences, and API calls 
-                that would break if modified.
-              </p>
-            </div>
-            <div className="card p-6">
-              <div className="text-blue-400 text-2xl mb-3">🔧</div>
-              <h3 className="font-semibold mb-2">4 Protection Levels</h3>
-              <p className="text-sm text-zinc-400">
-                From minimal wrapping to multi-layer protection. Choose the right balance 
-                of security and performance.
-              </p>
-            </div>
+      {/* Features Section */}
+      <section id="features" className="py-20 border-t border-[#1f1f28]">
+        <div className="container mx-auto px-4 max-w-6xl">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold mb-4">Why Choose Prometheus?</h2>
+            <p className="text-zinc-400 max-w-2xl mx-auto">
+              Built specifically for Roblox executors with cutting-edge obfuscation techniques.
+            </p>
           </div>
-        </section>
+          
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[
+              {
+                icon: '🔐',
+                title: 'Multi-Key Encryption',
+                desc: 'Rolling XOR encryption with multiple keys makes reverse engineering extremely difficult.'
+              },
+              {
+                icon: '⚡',
+                title: 'Executor Compatible',
+                desc: 'Works flawlessly with Delta, Velocity, Xeno, Synapse, and all modern executors.'
+              },
+              {
+                icon: '🛡️',
+                title: 'Anti-Tamper Protection',
+                desc: 'Built-in checks detect and prevent code modification attempts.'
+              },
+              {
+                icon: '🔀',
+                title: 'Control Flow Obfuscation',
+                desc: 'State-machine based control flow makes static analysis nearly impossible.'
+              },
+              {
+                icon: '📦',
+                title: 'String Table Encryption',
+                desc: 'All strings (including URLs) are encrypted and hidden from prying eyes.'
+              },
+              {
+                icon: '🚀',
+                title: 'Zero Dependencies',
+                desc: 'Client-side processing. Your code never leaves your browser.'
+              },
+            ].map((feature, i) => (
+              <div key={i} className="card-glow p-6">
+                <div className="feature-icon">{feature.icon}</div>
+                <h3 className="font-semibold text-lg mb-2">{feature.title}</h3>
+                <p className="text-sm text-zinc-400 leading-relaxed">{feature.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
-        {/* Comparison Section */}
-        <section className="mb-16">
-          <h2 className="text-2xl font-bold text-center mb-8">How We Compare</h2>
+      {/* Comparison Section */}
+      <section id="comparison" className="py-20 border-t border-[#1f1f28] bg-[#0a0a0c]">
+        <div className="container mx-auto px-4 max-w-6xl">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold mb-4">How We Compare</h2>
+            <p className="text-zinc-400 max-w-2xl mx-auto">
+              See how Prometheus stacks up against other obfuscators.
+            </p>
+          </div>
+          
           <div className="card overflow-hidden">
-            <table className="w-full text-sm">
+            <table className="comparison-table">
               <thead>
-                <tr className="border-b border-zinc-800">
-                  <th className="text-left p-4 text-zinc-400">Feature</th>
-                  <th className="p-4 text-center text-blue-400">Prometheus</th>
-                  <th className="p-4 text-center text-zinc-500">Others</th>
+                <tr className="bg-[#151519]">
+                  <th>Feature</th>
+                  <th className="text-center">
+                    <span className="gradient-text font-semibold">Prometheus</span>
+                  </th>
+                  <th className="text-center text-zinc-500">Others</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-800/50">
-                <tr>
-                  <td className="p-4 text-zinc-300">Executor Compatible</td>
-                  <td className="p-4 text-center text-green-400">✓</td>
-                  <td className="p-4 text-center text-red-400">Often breaks</td>
-                </tr>
-                <tr>
-                  <td className="p-4 text-zinc-300">Preserves loadstring() calls</td>
-                  <td className="p-4 text-center text-green-400">✓</td>
-                  <td className="p-4 text-center text-red-400">Wraps everything</td>
-                </tr>
-                <tr>
-                  <td className="p-4 text-zinc-300">Safe string handling</td>
-                  <td className="p-4 text-center text-green-400">✓</td>
-                  <td className="p-4 text-center text-yellow-400">Partial</td>
-                </tr>
-                <tr>
-                  <td className="p-4 text-zinc-300">LuaU/Roblox focused</td>
-                  <td className="p-4 text-center text-green-400">✓</td>
-                  <td className="p-4 text-center text-yellow-400">Generic Lua</td>
-                </tr>
-                <tr>
-                  <td className="p-4 text-zinc-300">Free to use</td>
-                  <td className="p-4 text-center text-green-400">✓</td>
-                  <td className="p-4 text-center text-yellow-400">Varies</td>
-                </tr>
+              <tbody>
+                {[
+                  { feature: 'Executor Compatible', prometheus: true, others: 'partial' },
+                  { feature: 'URL Encryption', prometheus: true, others: false },
+                  { feature: 'Multi-Key XOR', prometheus: true, others: false },
+                  { feature: 'Control Flow Obfuscation', prometheus: true, others: 'partial' },
+                  { feature: 'Anti-Tamper Checks', prometheus: true, others: 'partial' },
+                  { feature: 'Client-Side Processing', prometheus: true, others: 'partial' },
+                  { feature: 'Free to Use', prometheus: true, others: 'partial' },
+                  { feature: 'No Rate Limits', prometheus: true, others: false },
+                ].map((row, i) => (
+                  <tr key={i}>
+                    <td className="text-zinc-300">{row.feature}</td>
+                    <td className="text-center">
+                      {row.prometheus ? (
+                        <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-green-500/20 text-green-400">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </span>
+                      ) : (
+                        <span className="text-red-400">✕</span>
+                      )}
+                    </td>
+                    <td className="text-center">
+                      {row.others === true ? (
+                        <span className="text-green-400">✓</span>
+                      ) : row.others === 'partial' ? (
+                        <span className="text-yellow-400">~</span>
+                      ) : (
+                        <span className="text-red-400">✕</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
-        </section>
+        </div>
+      </section>
 
-        {/* FAQ Section */}
-        <section className="mb-16">
-          <h2 className="text-2xl font-bold text-center mb-8">FAQ</h2>
-          <div className="space-y-4 max-w-3xl mx-auto">
-            <div className="card p-5">
-              <h3 className="font-semibold mb-2">Which executors are supported?</h3>
-              <p className="text-sm text-zinc-400">
-                Delta, Velocity, Xeno, Synapse, and most modern executors. We use bit32 
-                operations and avoid Lua 5.3+ syntax.
-              </p>
-            </div>
-            <div className="card p-5">
-              <h3 className="font-semibold mb-2">Why isn't my script working after obfuscation?</h3>
-              <p className="text-sm text-zinc-400">
-                Try a lower protection level. Some complex scripts with loadstring or 
-                dynamic code generation work better with Low or Medium presets.
-              </p>
-            </div>
-            <div className="card p-5">
-              <h3 className="font-semibold mb-2">Is my code stored anywhere?</h3>
-              <p className="text-sm text-zinc-400">
-                No. All obfuscation happens in your browser. Your code never leaves your device.
-              </p>
-            </div>
+      {/* FAQ Section */}
+      <section id="faq" className="py-20 border-t border-[#1f1f28]">
+        <div className="container mx-auto px-4 max-w-3xl">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold mb-4">Frequently Asked Questions</h2>
           </div>
-        </section>
-      </main>
+          
+          <div className="space-y-4">
+            {[
+              {
+                q: 'Which executors are supported?',
+                a: 'Prometheus works with all modern Roblox executors including Delta, Velocity, Xeno, Synapse, and more. We use bit32 operations and IIFE wrappers for maximum compatibility.'
+              },
+              {
+                q: 'Why isn\'t my script working after obfuscation?',
+                a: 'Try a lower protection level first. Some scripts with very dynamic code might need adjustments. If issues persist, the Low preset is the safest option.'
+              },
+              {
+                q: 'Is my code stored anywhere?',
+                a: 'No. All obfuscation happens entirely in your browser. Your code never leaves your device and is never sent to any server.'
+              },
+              {
+                q: 'Can obfuscated code be reversed?',
+                a: 'While no obfuscation is 100% unbreakable, Prometheus uses multiple layers of encryption and obfuscation that make reverse engineering extremely time-consuming and difficult.'
+              },
+              {
+                q: 'What\'s the difference between protection levels?',
+                a: 'Low uses basic encoding. Medium adds XOR encryption. High adds multi-key encryption and control flow. Maximum adds everything including string shuffling and triple XOR.'
+              },
+            ].map((faq, i) => (
+              <div key={i} className="card p-6">
+                <h3 className="font-semibold mb-3 flex items-center gap-3">
+                  <span className="w-6 h-6 rounded-full bg-[#6366f1]/20 text-[#6366f1] text-sm flex items-center justify-center flex-shrink-0">
+                    {i + 1}
+                  </span>
+                  {faq.q}
+                </h3>
+                <p className="text-sm text-zinc-400 leading-relaxed pl-9">{faq.a}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* CTA Section */}
+      <section className="py-16 border-t border-[#1f1f28]">
+        <div className="container mx-auto px-4 max-w-4xl text-center">
+          <h2 className="text-2xl font-bold mb-4">Looking for Roblox Scripts?</h2>
+          <p className="text-zinc-400 mb-8">
+            Check out our collection of premium scripts for popular Roblox games.
+          </p>
+          <a 
+            href="https://templo-steel.vercel.app/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-primary inline-flex items-center gap-2"
+          >
+            Visit Scripts Hub
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+          </a>
+        </div>
+      </section>
 
       <Footer />
     </div>

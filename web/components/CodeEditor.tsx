@@ -20,30 +20,32 @@ export default function CodeEditor({
 }: CodeEditorProps) {
 
   const handleMount: OnMount = useCallback((editor, monaco: Monaco) => {
-    monaco.editor.defineTheme('minimal-dark', {
+    monaco.editor.defineTheme('prometheus-dark', {
       base: 'vs-dark',
       inherit: true,
       rules: [
-        { token: 'comment', foreground: '6b7280', fontStyle: 'italic' },
-        { token: 'keyword', foreground: '60a5fa' },
-        { token: 'string', foreground: 'a78bfa' },
+        { token: 'comment', foreground: '525266', fontStyle: 'italic' },
+        { token: 'keyword', foreground: '818cf8' },
+        { token: 'string', foreground: 'c084fc' },
         { token: 'number', foreground: 'fbbf24' },
-        { token: 'operator', foreground: '9ca3af' },
-        { token: 'identifier', foreground: 'e5e7eb' },
+        { token: 'operator', foreground: '71717a' },
+        { token: 'identifier', foreground: 'e4e4e7' },
+        { token: 'string.escape', foreground: 'f472b6' },
       ],
       colors: {
-        'editor.background': '#111113',
-        'editor.foreground': '#e5e7eb',
-        'editor.lineHighlightBackground': '#18181b',
-        'editor.selectionBackground': '#3b82f633',
-        'editorLineNumber.foreground': '#3f3f46',
-        'editorLineNumber.activeForeground': '#71717a',
-        'editorCursor.foreground': '#3b82f6',
-        'editorIndentGuide.background': '#27272a',
+        'editor.background': '#0f0f12',
+        'editor.foreground': '#e4e4e7',
+        'editor.lineHighlightBackground': '#15151a',
+        'editor.selectionBackground': '#6366f133',
+        'editorLineNumber.foreground': '#2a2a35',
+        'editorLineNumber.activeForeground': '#525266',
+        'editorCursor.foreground': '#6366f1',
+        'editorIndentGuide.background': '#1f1f28',
+        'editor.lineHighlightBorder': '#1f1f28',
       }
     })
 
-    monaco.editor.setTheme('minimal-dark')
+    monaco.editor.setTheme('prometheus-dark')
 
     monaco.languages.setMonarchTokensProvider('lua', {
       defaultToken: '',
