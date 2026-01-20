@@ -1,0 +1,30 @@
+Implemented Vercel Speed Insights for Next.js as requested.
+
+Project Information:
+- Framework: Next.js 14.2.28 (supports App Router)
+- Package Manager: npm
+- Router Type: App Router (using app/layout.tsx)
+
+Changes Made:
+
+1. **Installed Package**:
+   - Added `@vercel/speed-insights` package (version ^1.3.1)
+   - Updated package-lock.json with dependency lock information
+
+2. **Modified Files**:
+   - web/app/layout.tsx: 
+     - Added import: `import { SpeedInsights } from '@vercel/speed-insights/next'`
+     - Added component: `<SpeedInsights />` inside the body tag after {children}
+
+Why These Changes:
+- Since the project uses Next.js 14.2.28 with App Router (Next.js 13.5+), we used the '@vercel/speed-insights/next' import
+- The SpeedInsights component was placed inside the body tag after {children} as recommended for App Router
+- No need for 'use client' directive as SpeedInsights handles client-side rendering internally in Next.js
+
+Verification:
+- ✓ Build completed successfully with no errors
+- ✓ All dependencies installed and locked
+- ✓ TypeScript compilation successful
+- ✓ Production build generated (4 static pages)
+
+The Speed Insights component is now active and will collect anonymous performance metrics for the Prometheus Obfuscator web interface.
