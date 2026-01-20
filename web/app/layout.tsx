@@ -1,22 +1,81 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Prometheus Obfuscator | Lua Code Protection',
-  description: 'Professional Lua obfuscator with VM protection, string encryption, control flow flattening, and more. Protect your Lua and Roblox scripts.',
-  keywords: 'lua obfuscator, roblox obfuscator, lua protection, code obfuscation, prometheus',
-  authors: [{ name: 'Prometheus Team' }],
-  icons: {
-    icon: '/favicon.svg',
+  metadataBase: new URL('https://prometheus-obfuscator.vercel.app'),
+  title: 'Prometheus - Professional Lua Obfuscator for Roblox',
+  description: 'Protect your Roblox scripts with military-grade encryption. Free Lua obfuscator compatible with Delta, Velocity, Xeno, and all modern executors. Multi-key XOR, control flow obfuscation, anti-dump protection.',
+  keywords: [
+    'lua obfuscator',
+    'roblox obfuscator',
+    'luau obfuscator',
+    'roblox script protection',
+    'lua encryption',
+    'roblox executor',
+    'delta executor',
+    'velocity executor',
+    'xeno executor',
+    'free lua obfuscator',
+    'script obfuscation',
+    'code protection',
+  ],
+  authors: [{ name: 'Prometheus', url: 'https://prometheus-obfuscator.vercel.app' }],
+  creator: 'Prometheus',
+  publisher: 'Prometheus',
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
   },
   openGraph: {
-    title: 'Prometheus Obfuscator',
-    description: 'Professional Lua code protection',
     type: 'website',
+    locale: 'en_US',
+    url: 'https://prometheus-obfuscator.vercel.app',
+    siteName: 'Prometheus Lua Obfuscator',
+    title: 'Prometheus - Professional Lua Obfuscator for Roblox',
+    description: 'Protect your Roblox scripts with military-grade encryption. Free, fast, and executor-compatible.',
+    images: [
+      {
+        url: '/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: 'Prometheus Lua Obfuscator',
+      },
+    ],
   },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Prometheus - Professional Lua Obfuscator for Roblox',
+    description: 'Protect your Roblox scripts with military-grade encryption. Free and executor-compatible.',
+    images: ['/og-image.png'],
+  },
+  icons: {
+    icon: [
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/icon.svg', type: 'image/svg+xml' },
+    ],
+    apple: '/apple-touch-icon.png',
+  },
+  manifest: '/manifest.json',
+  alternates: {
+    canonical: 'https://prometheus-obfuscator.vercel.app',
+  },
+}
+
+export const viewport: Viewport = {
+  themeColor: '#09090b',
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
 }
 
 export default function RootLayout({
@@ -25,9 +84,15 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
-      <body className={`${inter.className} antialiased`}>
-        <div className="scanline" />
+    <html lang="en" className="dark">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <meta name="theme-color" content="#09090b" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+      </head>
+      <body className={inter.className}>
         {children}
       </body>
     </html>

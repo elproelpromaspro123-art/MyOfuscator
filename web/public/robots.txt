@@ -1,0 +1,10 @@
+# Robots.txt for Prometheus Lua Obfuscator
+
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://prometheus-obfuscator.vercel.app/sitemap.xml
+
+# Crawl-delay
+Crawl-delay: 1
