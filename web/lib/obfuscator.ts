@@ -7,8 +7,9 @@ export interface ObfuscationResult {
   stepsApplied: number
 }
 
-const CHARS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
-const randVar = () => '_' + Array.from({ length: 10 }, () => CHARS[Math.floor(Math.random() * 52)]).join('')
+// Character sets
+const ALPHA = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
+const randVar = () => '_' + Array.from({ length: 12 }, () => ALPHA[Math.floor(Math.random() * 52)]).join('')
 const randInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min
 
 function shuffle<T>(arr: T[]): T[] {
@@ -20,284 +21,243 @@ function shuffle<T>(arr: T[]): T[] {
   return result
 }
 
-// Convert string to octal escape sequence like \120\056\053
-function toOctal(str: string): string {
+// Convert a single byte to 3-digit octal
+function byteToOctal(byte: number): string {
+  return '\\' + byte.toString(8).padStart(3, '0')
+}
+
+// Convert string to octal escape format
+function stringToOctal(str: string): string {
   let result = ''
   for (let i = 0; i < str.length; i++) {
-    const code = str.charCodeAt(i)
-    result += '\\' + code.toString(8).padStart(3, '0')
+    result += byteToOctal(str.charCodeAt(i))
   }
-  return '"' + result + '"'
-}
-
-// Convert string to decimal byte array
-function toByteArray(str: string): number[] {
-  const bytes: number[] = []
-  for (let i = 0; i < str.length; i++) {
-    bytes.push(str.charCodeAt(i))
-  }
-  return bytes
-}
-
-// XOR encrypt bytes with key
-function xorEncrypt(bytes: number[], key: number): number[] {
-  return bytes.map(b => b ^ key)
-}
-
-// Generate Base64 alphabet (shuffled for each obfuscation)
-function generateBase64Alphabet(): string {
-  const standard = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-  return shuffle(standard.split('')).join('')
-}
-
-// Encode string to custom base64
-function customBase64Encode(str: string, alphabet: string): string {
-  const bytes = toByteArray(str)
-  let result = ''
-  
-  for (let i = 0; i < bytes.length; i += 3) {
-    const b1 = bytes[i]
-    const b2 = bytes[i + 1] || 0
-    const b3 = bytes[i + 2] || 0
-    
-    const c1 = b1 >> 2
-    const c2 = ((b1 & 3) << 4) | (b2 >> 4)
-    const c3 = ((b2 & 15) << 2) | (b3 >> 6)
-    const c4 = b3 & 63
-    
-    result += alphabet[c1] + alphabet[c2]
-    result += (i + 1 < bytes.length) ? alphabet[c3] : '='
-    result += (i + 2 < bytes.length) ? alphabet[c4] : '='
-  }
-  
   return result
 }
 
-// Extract all strings from Lua code
-function extractStrings(code: string): { strings: string[], positions: { start: number, end: number, content: string }[] } {
-  const strings: string[] = []
-  const positions: { start: number, end: number, content: string }[] = []
+// Parse code into tokens (preserving exact positions)
+interface Token {
+  type: 'code' | 'string' | 'longstring' | 'comment' | 'longcomment'
+  value: string
+  start: number
+  end: number
+  quote?: string
+  rawContent?: string
+}
+
+function tokenize(code: string): Token[] {
+  const tokens: Token[] = []
   let i = 0
   
   while (i < code.length) {
-    // Skip comments
+    const start = i
+    
+    // Long comment --[[...]]
+    if (code[i] === '-' && code[i + 1] === '-' && code[i + 2] === '[' && code[i + 3] === '[') {
+      let j = i + 4
+      let depth = 1
+      while (j < code.length && depth > 0) {
+        if (code[j] === ']' && code[j + 1] === ']') {
+          depth--
+          if (depth === 0) break
+        }
+        j++
+      }
+      j += 2
+      tokens.push({ type: 'longcomment', value: code.slice(start, j), start, end: j })
+      i = j
+      continue
+    }
+    
+    // Single line comment
     if (code[i] === '-' && code[i + 1] === '-') {
-      if (code[i + 2] === '[' && code[i + 3] === '[') {
-        let j = i + 4
-        while (j < code.length - 1 && !(code[j] === ']' && code[j + 1] === ']')) j++
-        i = j + 2
+      let j = i + 2
+      while (j < code.length && code[j] !== '\n') j++
+      tokens.push({ type: 'comment', value: code.slice(start, j), start, end: j })
+      i = j
+      continue
+    }
+    
+    // Long string [[...]] or [=[...]=] etc
+    if (code[i] === '[') {
+      let eqCount = 0
+      let j = i + 1
+      while (j < code.length && code[j] === '=') {
+        eqCount++
+        j++
+      }
+      if (code[j] === '[') {
+        // Found long string start
+        const endPattern = ']' + '='.repeat(eqCount) + ']'
+        let searchStart = j + 1
+        let endIdx = code.indexOf(endPattern, searchStart)
+        if (endIdx === -1) endIdx = code.length
+        else endIdx += endPattern.length
+        tokens.push({ type: 'longstring', value: code.slice(start, endIdx), start, end: endIdx })
+        i = endIdx
         continue
       }
-      while (i < code.length && code[i] !== '\n') i++
-      continue
     }
     
-    // Long strings [[...]] - preserve as-is
-    if (code[i] === '[' && code[i + 1] === '[') {
-      let j = i + 2
-      while (j < code.length - 1 && !(code[j] === ']' && code[j + 1] === ']')) j++
-      i = j + 2
-      continue
-    }
-    
-    // Quoted strings
+    // Quoted string
     if (code[i] === '"' || code[i] === "'") {
       const quote = code[i]
-      const start = i
       let j = i + 1
       let content = ''
-      let hasEscape = false
       
       while (j < code.length) {
-        if (code[j] === '\\') {
-          hasEscape = true
-          content += code[j] + (code[j + 1] || '')
+        if (code[j] === '\\' && j + 1 < code.length) {
+          content += code[j] + code[j + 1]
           j += 2
           continue
         }
-        if (code[j] === quote) break
+        if (code[j] === quote) {
+          break
+        }
         content += code[j]
         j++
       }
+      j++ // include closing quote
       
-      const fullString = code.slice(start, j + 1)
-      const rawContent = content
-      
-      // Only add to extraction if it's safe to encrypt
-      if (!hasEscape && 
-          rawContent.length >= 2 && 
-          rawContent.length <= 200 &&
-          !/[\x00-\x1f\x7f-\xff]/.test(rawContent)) {
-        strings.push(rawContent)
-        positions.push({ start, end: j + 1, content: rawContent })
-      }
-      
-      i = j + 1
+      tokens.push({ 
+        type: 'string', 
+        value: code.slice(start, j), 
+        start, 
+        end: j,
+        quote,
+        rawContent: content
+      })
+      i = j
       continue
     }
     
-    i++
+    // Regular code (everything else until we hit a string/comment starter)
+    let j = i
+    while (j < code.length) {
+      if (code[j] === '"' || code[j] === "'" || code[j] === '[' || 
+          (code[j] === '-' && code[j + 1] === '-')) {
+        break
+      }
+      j++
+    }
+    
+    if (j > i) {
+      tokens.push({ type: 'code', value: code.slice(start, j), start, end: j })
+      i = j
+    } else {
+      // Single character that doesn't start anything special
+      tokens.push({ type: 'code', value: code[i], start: i, end: i + 1 })
+      i++
+    }
   }
   
-  return { strings, positions }
+  return tokens
 }
 
-// Generate the string table and decoder
-function generateStringTable(strings: string[], level: number): { table: string, decoder: string, varName: string } {
+// Check if string content is safe to encode (no escape sequences, no special chars)
+function isSafeToEncode(content: string): boolean {
+  // Has escape sequences like \n, \t, \\, \"
+  if (content.includes('\\')) return false
+  
+  // Check for non-ASCII characters (emojis, unicode)
+  for (let i = 0; i < content.length; i++) {
+    const code = content.charCodeAt(i)
+    if (code < 32 || code > 126) return false
+  }
+  
+  // Too short to bother
+  if (content.length < 2) return false
+  
+  // URLs - preserve as-is (loadstring, HttpGet need exact URLs)
+  if (/https?:\/\//.test(content)) return false
+  if (/\.com|\.net|\.org|\.gg|\.io|\.lua|\.txt/.test(content)) return false
+  
+  // Roblox-specific patterns that should not be touched
+  if (/github\.com|githubusercontent|pastebin|raw\.|gist\.|work\.ink/.test(content)) return false
+  
+  return true
+}
+
+// Build the obfuscated code using a string table approach (like WeAreDevs)
+function buildWithStringTable(tokens: Token[], encryptStrings: boolean): string {
+  const stringTable: string[] = []
+  const stringMap = new Map<string, number>() // content -> index
+  
+  // First pass: collect all safe strings
+  if (encryptStrings) {
+    for (const token of tokens) {
+      if (token.type === 'string' && token.rawContent !== undefined) {
+        if (isSafeToEncode(token.rawContent) && !stringMap.has(token.rawContent)) {
+          stringMap.set(token.rawContent, stringTable.length)
+          stringTable.push(token.rawContent)
+        }
+      }
+    }
+  }
+  
+  // If no strings to encrypt, just rebuild without comments
+  if (stringTable.length === 0) {
+    let result = ''
+    for (const token of tokens) {
+      if (token.type === 'comment' || token.type === 'longcomment') continue
+      result += token.value
+    }
+    return result
+  }
+  
+  // Generate the string table with XOR decryption
   const tableVar = randVar()
   const decoderVar = randVar()
-  const key = randInt(1, 250)
+  const key = randInt(1, 200)
   
-  if (level === 1) {
-    // Simple: just octal encoding
-    const encoded = strings.map(s => toOctal(s))
-    return {
-      table: `local ${tableVar}={${encoded.join(',')}}`,
-      decoder: '',
-      varName: tableVar
+  // Encode all strings with XOR + octal
+  const encodedStrings = stringTable.map(s => {
+    let encoded = ''
+    for (let i = 0; i < s.length; i++) {
+      const byte = s.charCodeAt(i) ^ key
+      encoded += byteToOctal(byte)
     }
-  }
-  
-  if (level === 2) {
-    // Medium: XOR + byte array
-    const iVar = randVar()
-    const jVar = randVar()
-    const rVar = randVar()
-    const cVar = randVar()
-    const tVar = randVar()
-    
-    const encoded = strings.map(s => {
-      const bytes = xorEncrypt(toByteArray(s), key)
-      return `{${bytes.join(',')}}`
-    })
-    
-    const decoder = `local function ${decoderVar}(${tVar})local ${rVar}=""for ${iVar}=1,#${tVar} do ${rVar}=${rVar}..string.char(bit32.bxor(${tVar}[${iVar}],${key}))end return ${rVar} end`
-    
-    return {
-      table: `local ${tableVar}={${encoded.join(',')}}`,
-      decoder,
-      varName: tableVar,
-    }
-  }
-  
-  // High/Maximum: Custom Base64 + XOR
-  const alphabet = generateBase64Alphabet()
-  const alphaVar = randVar()
-  const iVar = randVar()
-  const jVar = randVar()
-  const rVar = randVar()
-  const bVar = randVar()
-  const cVar = randVar()
-  const pVar = randVar()
-  const lVar = randVar()
-  
-  const encoded = strings.map(s => {
-    const xored = String.fromCharCode(...xorEncrypt(toByteArray(s), key))
-    return toOctal(customBase64Encode(xored, alphabet))
+    return '"' + encoded + '"'
   })
   
-  // Generate reverse lookup for alphabet
-  const decoder = `local ${alphaVar}=${toOctal(alphabet)}
-local function ${decoderVar}(${cVar})
-local ${rVar}=""
-local ${bVar}={}
-for ${iVar}=1,64 do ${bVar}[string.sub(${alphaVar},${iVar},${iVar})]=${iVar}-1 end
-local ${pVar}=1
-local ${lVar}=#${cVar}
-while ${pVar}<=${lVar} do
-local c1,c2,c3,c4=${bVar}[string.sub(${cVar},${pVar},${pVar})],${bVar}[string.sub(${cVar},${pVar}+1,${pVar}+1)],${bVar}[string.sub(${cVar},${pVar}+2,${pVar}+2)],${bVar}[string.sub(${cVar},${pVar}+3,${pVar}+3)]
-if c1 and c2 then
-${rVar}=${rVar}..string.char(bit32.bxor(bit32.bor(bit32.lshift(c1,2),bit32.rshift(c2,4)),${key}))
-if c3 and string.sub(${cVar},${pVar}+2,${pVar}+2)~="=" then ${rVar}=${rVar}..string.char(bit32.bxor(bit32.bor(bit32.lshift(bit32.band(c2,15),4),bit32.rshift(c3,2)),${key}))end
-if c4 and string.sub(${cVar},${pVar}+3,${pVar}+3)~="=" then ${rVar}=${rVar}..string.char(bit32.bxor(bit32.bor(bit32.lshift(bit32.band(c3,3),6),c4),${key}))end
-end
-${pVar}=${pVar}+4
-end
-return ${rVar}
-end`
+  // Build decoder function
+  const iVar = randVar()
+  const rVar = randVar()
+  const tVar = randVar()
+  const decoder = `local function ${decoderVar}(${tVar})local ${rVar}=""for ${iVar}=1,#${tVar} do ${rVar}=${rVar}..string.char(bit32.bxor(string.byte(${tVar},${iVar}),${key}))end return ${rVar} end`
   
-  return {
-    table: `local ${tableVar}={${encoded.join(',')}}`,
-    decoder,
-    varName: tableVar,
-  }
-}
-
-// Replace strings in code with table lookups
-function replaceStrings(
-  code: string, 
-  positions: { start: number, end: number, content: string }[], 
-  strings: string[],
-  tableVar: string,
-  hasDecoder: boolean,
-  decoderVar: string
-): string {
-  // Sort positions in reverse order to replace from end to start
-  const sorted = [...positions].sort((a, b) => b.start - a.start)
+  // Build string table
+  const tableDecl = `local ${tableVar}={${encodedStrings.join(',')}}`
   
-  let result = code
-  for (const pos of sorted) {
-    const idx = strings.indexOf(pos.content) + 1
-    if (idx > 0) {
-      const replacement = hasDecoder 
-        ? `${decoderVar}(${tableVar}[${idx}])`
-        : `${tableVar}[${idx}]`
-      result = result.slice(0, pos.start) + replacement + result.slice(pos.end)
+  // Rebuild code with table lookups
+  let codeBody = ''
+  for (const token of tokens) {
+    if (token.type === 'comment' || token.type === 'longcomment') continue
+    
+    if (token.type === 'string' && token.rawContent !== undefined && stringMap.has(token.rawContent)) {
+      const idx = stringMap.get(token.rawContent)! + 1
+      codeBody += `${decoderVar}(${tableVar}[${idx}])`
+    } else {
+      codeBody += token.value
     }
   }
   
-  return result
+  return decoder + ';' + tableDecl + ';' + codeBody
 }
 
-// Remove comments from code
-function removeComments(code: string): string {
+// Simple octal encoding without XOR (faster, still hides content)
+function buildWithOctalStrings(tokens: Token[]): string {
   let result = ''
-  let i = 0
   
-  while (i < code.length) {
-    if (code[i] === '-' && code[i + 1] === '-') {
-      if (code[i + 2] === '[' && code[i + 3] === '[') {
-        let j = i + 4
-        while (j < code.length - 1 && !(code[j] === ']' && code[j + 1] === ']')) j++
-        i = j + 2
-        continue
-      }
-      while (i < code.length && code[i] !== '\n') i++
-      continue
-    }
+  for (const token of tokens) {
+    if (token.type === 'comment' || token.type === 'longcomment') continue
     
-    // Preserve strings
-    if (code[i] === '"' || code[i] === "'") {
-      const quote = code[i]
-      result += code[i]
-      i++
-      while (i < code.length) {
-        if (code[i] === '\\') {
-          result += code[i] + (code[i + 1] || '')
-          i += 2
-          continue
-        }
-        result += code[i]
-        if (code[i] === quote) {
-          i++
-          break
-        }
-        i++
-      }
-      continue
+    if (token.type === 'string' && token.rawContent !== undefined && isSafeToEncode(token.rawContent)) {
+      // Convert to octal format
+      result += '"' + stringToOctal(token.rawContent) + '"'
+    } else {
+      result += token.value
     }
-    
-    // Long strings
-    if (code[i] === '[' && code[i + 1] === '[') {
-      let j = i + 2
-      while (j < code.length - 1 && !(code[j] === ']' && code[j + 1] === ']')) j++
-      result += code.slice(i, j + 2)
-      i = j + 2
-      continue
-    }
-    
-    result += code[i]
-    i++
   }
   
   return result
@@ -310,7 +270,7 @@ function generateJunk(count: number): string {
   for (let i = 0; i < count; i++) {
     const v1 = randVar()
     const v2 = randVar()
-    const n1 = randInt(1000, 999999)
+    const n1 = randInt(10000, 999999)
     const n2 = randInt(100, 9999)
     
     const patterns = [
@@ -318,8 +278,7 @@ function generateJunk(count: number): string {
       `local ${v1}=function()return ${n1} end`,
       `local ${v1}={${n1},${n2}}`,
       `local ${v1},${v2}=${n1},${n2}`,
-      `do local ${v1}=${n1} end`,
-      `local ${v1}=${n1}*${n2}-${n1}*${n2}`,
+      `do local ${v1}=${n1}*${n2}-${n1}*${n2}end`,
     ]
     junks.push(patterns[randInt(0, patterns.length - 1)])
   }
@@ -327,12 +286,12 @@ function generateJunk(count: number): string {
   return shuffle(junks).join(';') + ';'
 }
 
-// Generate opaque predicates (always true conditions)
-function generateOpaqueCheck(): string {
+// Generate opaque predicate (always true)
+function generateOpaquePredicate(): string {
   const v1 = randVar()
   const v2 = randVar()
-  const n1 = randInt(100, 9999)
-  const n2 = randInt(10, 99)
+  const n1 = randInt(1000, 9999)
+  const n2 = randInt(100, 999)
   const product = n1 * n2
   
   return `local ${v1},${v2}=${n1},${n2};if ${v1}*${v2}~=${product} then return end;`
@@ -341,143 +300,119 @@ function generateOpaqueCheck(): string {
 // Environment check
 function generateEnvCheck(): string {
   const t = randVar()
-  const checks = shuffle([
-    `${t}(bit32)=="table"`,
-    `${t}(string)=="table"`,
-    `${t}(math)=="table"`,
-    `${t}(table)=="table"`,
-  ]).slice(0, 2)
-  
-  return `local ${t}=type;if not(${checks.join(' and ')})then return end;`
+  return `local ${t}=type;if ${t}(bit32)~="table"or ${t}(string)~="table"then return end;`
 }
 
-// Wrap code in function layers
-function wrapInFunction(code: string, layers: number = 1): string {
+// Wrap in function
+function wrapInFunction(code: string, layers: number): string {
   let result = code
   
   for (let i = 0; i < layers; i++) {
     const fn = randVar()
-    const arg = randVar()
-    const key = randInt(1000, 99999)
-    
-    if (i === layers - 1) {
-      // Outermost layer - the one that gets called
-      result = `local ${fn}=function()${result} end;return ${fn}()`
-    } else {
-      // Inner layers with key check
-      result = `local ${fn}=function(${arg})if ${arg}~=${key} then return end;${result} end;${fn}(${key})`
-    }
+    result = `local ${fn}=(function()${result} end);return ${fn}()`
   }
   
   return result
 }
 
-// Minify code
+// Minify - carefully preserve string contents
 function minify(code: string): string {
+  const tokens = tokenize(code)
   let result = ''
-  let i = 0
-  let inString = false
-  let stringChar = ''
-  let inLongString = false
+  let lastChar = ''
   
-  while (i < code.length) {
-    const c = code[i]
-    const next = code[i + 1] || ''
+  for (const token of tokens) {
+    if (token.type === 'comment' || token.type === 'longcomment') continue
     
-    if (inLongString) {
-      result += c
-      if (c === ']' && next === ']') {
-        result += next
-        i += 2
-        inLongString = false
-        continue
+    if (token.type === 'code') {
+      // Process whitespace in code sections
+      let processed = ''
+      let i = 0
+      while (i < token.value.length) {
+        const c = token.value[i]
+        
+        if (/\s/.test(c)) {
+          // Collapse whitespace
+          while (i < token.value.length && /\s/.test(token.value[i])) i++
+          
+          // Keep single space if needed between identifiers
+          const prev = processed[processed.length - 1] || lastChar
+          const next = token.value[i] || ''
+          if (/[a-zA-Z0-9_]/.test(prev) && /[a-zA-Z0-9_]/.test(next)) {
+            processed += ' '
+          }
+        } else {
+          processed += c
+          i++
+        }
       }
-      i++
-      continue
+      result += processed
+      if (processed.length > 0) lastChar = processed[processed.length - 1]
+    } else {
+      // Strings and long strings - keep as-is
+      result += token.value
+      if (token.value.length > 0) lastChar = token.value[token.value.length - 1]
     }
-    
-    if (inString) {
-      result += c
-      if (c === '\\') {
-        result += next
-        i += 2
-        continue
-      }
-      if (c === stringChar) inString = false
-      i++
-      continue
-    }
-    
-    if (c === '"' || c === "'") {
-      inString = true
-      stringChar = c
-      result += c
-      i++
-      continue
-    }
-    
-    if (c === '[' && next === '[') {
-      inLongString = true
-      result += c + next
-      i += 2
-      continue
-    }
-    
-    if (/\s/.test(c)) {
-      const prev = result[result.length - 1] || ''
-      let j = i
-      while (j < code.length && /\s/.test(code[j])) j++
-      const nextChar = code[j] || ''
-      
-      if (/[a-zA-Z0-9_]/.test(prev) && /[a-zA-Z0-9_]/.test(nextChar)) {
-        result += ' '
-      }
-      i = j
-      continue
-    }
-    
-    result += c
-    i++
   }
   
   return result.trim()
 }
 
-// Rename local variables
+// Rename local variables (conservative - only simple patterns)
 function renameLocals(code: string): string {
-  const localPattern = /\blocal\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=/g
-  const funcPattern = /\blocal\s+function\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/g
-  const renames = new Map<string, string>()
+  // Find variable declarations and function parameters
+  const declarations = new Map<string, string>()
   
+  // Reserved Lua and Roblox identifiers
   const reserved = new Set([
-    'self', 'true', 'false', 'nil', 'and', 'or', 'not', 'if', 'then', 'else',
-    'elseif', 'end', 'for', 'while', 'do', 'repeat', 'until', 'function',
-    'return', 'break', 'local', 'in', 'goto',
-    'game', 'workspace', 'script', 'Instance', 'Vector3', 'CFrame', 'Color3',
-    'UDim2', 'UDim', 'Enum', 'pairs', 'ipairs', 'print', 'warn', 'error',
-    'type', 'typeof', 'tostring', 'tonumber', 'pcall', 'xpcall', 'select',
-    'require', 'loadstring', 'getfenv', 'setfenv', 'rawget', 'rawset',
-    'table', 'string', 'math', 'bit32', 'coroutine', 'os', 'debug',
-    'wait', 'spawn', 'delay', 'tick', 'time', 'typeof',
+    'and', 'break', 'do', 'else', 'elseif', 'end', 'false', 'for', 'function',
+    'goto', 'if', 'in', 'local', 'nil', 'not', 'or', 'repeat', 'return', 'then',
+    'true', 'until', 'while', 'self',
+    // Roblox globals
+    'game', 'workspace', 'script', 'plugin', 'shared', 'Instance', 'Vector3', 
+    'Vector2', 'CFrame', 'Color3', 'BrickColor', 'UDim', 'UDim2', 'Rect', 
+    'Ray', 'Region3', 'Faces', 'Axes', 'Enum', 'TweenInfo', 'NumberRange',
+    'NumberSequence', 'ColorSequence', 'PhysicalProperties', 'Random',
+    // Built-in functions
+    'pairs', 'ipairs', 'next', 'print', 'warn', 'error', 'assert', 'type',
+    'typeof', 'tostring', 'tonumber', 'select', 'unpack', 'pack', 'pcall',
+    'xpcall', 'require', 'loadstring', 'load', 'getfenv', 'setfenv',
+    'rawget', 'rawset', 'rawequal', 'setmetatable', 'getmetatable',
+    'collectgarbage', 'newproxy', 'coroutine', 'debug', 'os', 'table',
+    'string', 'math', 'bit32', 'utf8', 'task', 'delay', 'spawn', 'wait',
+    'tick', 'time', 'elapsedTime', 'gcinfo', 'stats', 'settings', 'version',
+    // Common Roblox service names that might be used
+    'Players', 'RunService', 'TweenService', 'UserInputService', 'StarterGui',
+    'ReplicatedStorage', 'ServerStorage', 'Workspace', 'Lighting',
   ])
   
+  // Pattern to find local variable declarations: local name = or local name,name2 =
+  const localDeclPattern = /\blocal\s+([a-zA-Z_][a-zA-Z0-9_]*)/g
   let match
-  while ((match = localPattern.exec(code)) !== null) {
+  
+  while ((match = localDeclPattern.exec(code)) !== null) {
     const name = match[1]
-    if (!reserved.has(name) && !renames.has(name)) {
-      renames.set(name, randVar())
+    if (!reserved.has(name) && !declarations.has(name) && name.length > 1) {
+      declarations.set(name, randVar())
     }
   }
   
-  while ((match = funcPattern.exec(code)) !== null) {
-    const name = match[1]
-    if (!reserved.has(name) && !renames.has(name)) {
-      renames.set(name, randVar())
+  // Pattern for function parameters: function name(param1, param2)
+  const funcParamPattern = /function\s*[a-zA-Z_]*\s*\(([^)]*)\)/g
+  while ((match = funcParamPattern.exec(code)) !== null) {
+    const params = match[1].split(',').map(p => p.trim())
+    for (const param of params) {
+      const paramName = param.split(':')[0].trim() // Handle type annotations
+      if (paramName && !reserved.has(paramName) && !declarations.has(paramName) && paramName.length > 1) {
+        declarations.set(paramName, randVar())
+      }
     }
   }
   
+  // Replace all occurrences
   let result = code
-  for (const [original, renamed] of renames) {
+  for (const [original, renamed] of declarations) {
+    // Word boundary replacement - be careful with patterns
     const regex = new RegExp(`\\b${original}\\b`, 'g')
     result = result.replace(regex, renamed)
   }
@@ -490,37 +425,24 @@ export async function obfuscateCode(code: string, settings: ObfuscationSettings)
   let result = code
   let steps = 0
   
-  // Remove comments first
-  result = removeComments(result)
-  steps++
-  
-  // Extract strings for encryption
-  const { strings, positions } = extractStrings(result)
+  // Tokenize the code
+  const tokens = tokenize(result)
   
   if (settings.preset === 'Low') {
-    // Low: Octal strings + junk + wrap
-    if (strings.length > 0) {
-      const { table, decoder, varName } = generateStringTable(strings, 1)
-      result = replaceStrings(result, positions, strings, varName, false, '')
-      result = table + ';' + result
-      steps++
-    }
+    // Low: Just octal strings + junk + simple wrap
+    result = buildWithOctalStrings(tokens)
+    steps++
     
     result = generateJunk(3) + result
     steps++
     
     result = wrapInFunction(result, 1)
     steps++
+    
   } else if (settings.preset === 'Medium') {
-    // Medium: XOR encrypted strings + rename + junk + wrap
-    if (strings.length > 0) {
-      const { table, decoder, varName } = generateStringTable(strings, 2)
-      const decoderMatch = decoder.match(/local function ([a-zA-Z_]+)\(/)
-      const actualDecoderVar = decoderMatch ? decoderMatch[1] : randVar()
-      result = replaceStrings(result, positions, strings, varName, true, actualDecoderVar)
-      result = decoder + ';' + table + ';' + result
-      steps++
-    }
+    // Medium: XOR string table + rename + junk + wrap
+    result = buildWithStringTable(tokens, true)
+    steps++
     
     result = renameLocals(result)
     steps++
@@ -533,16 +455,11 @@ export async function obfuscateCode(code: string, settings: ObfuscationSettings)
     
     result = wrapInFunction(result, 2)
     steps++
+    
   } else if (settings.preset === 'High') {
-    // High: Base64 + XOR strings + opaque predicates + multi-wrap
-    if (strings.length > 0) {
-      const { table, decoder, varName } = generateStringTable(strings, 3)
-      const decoderMatch = decoder.match(/local function ([a-zA-Z_]+)\(/)
-      const actualDecoderVar = decoderMatch ? decoderMatch[1] : randVar()
-      result = replaceStrings(result, positions, strings, varName, true, actualDecoderVar)
-      result = decoder + ';' + table + ';' + result
-      steps++
-    }
+    // High: Everything + opaque predicates + more layers
+    result = buildWithStringTable(tokens, true)
+    steps++
     
     result = renameLocals(result)
     steps++
@@ -550,27 +467,25 @@ export async function obfuscateCode(code: string, settings: ObfuscationSettings)
     result = generateJunk(6) + result
     steps++
     
-    result = generateOpaqueCheck() + result
+    result = generateOpaquePredicate() + result
     steps++
     
     result = generateEnvCheck() + result
     steps++
     
-    result = wrapInFunction(result, 3)
+    result = wrapInFunction(result, 2)
     steps++
     
     result = generateJunk(4) + result
     steps++
+    
+    result = wrapInFunction(result, 1)
+    steps++
+    
   } else if (settings.preset === 'Maximum') {
-    // Maximum: Everything + extra layers
-    if (strings.length > 0) {
-      const { table, decoder, varName } = generateStringTable(strings, 3)
-      const decoderMatch = decoder.match(/local function ([a-zA-Z_]+)\(/)
-      const actualDecoderVar = decoderMatch ? decoderMatch[1] : randVar()
-      result = replaceStrings(result, positions, strings, varName, true, actualDecoderVar)
-      result = decoder + ';' + table + ';' + result
-      steps++
-    }
+    // Maximum: Maximum protection
+    result = buildWithStringTable(tokens, true)
+    steps++
     
     result = renameLocals(result)
     steps++
@@ -578,7 +493,7 @@ export async function obfuscateCode(code: string, settings: ObfuscationSettings)
     result = generateJunk(8) + result
     steps++
     
-    result = generateOpaqueCheck() + result
+    result = generateOpaquePredicate() + result
     steps++
     
     result = generateEnvCheck() + result
@@ -590,7 +505,7 @@ export async function obfuscateCode(code: string, settings: ObfuscationSettings)
     result = generateJunk(5) + result
     steps++
     
-    result = generateOpaqueCheck() + result
+    result = generateOpaquePredicate() + result
     steps++
     
     result = wrapInFunction(result, 2)
