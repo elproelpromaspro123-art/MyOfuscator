@@ -1,7 +1,7 @@
 {
-  "name": "Prometheus Lua Obfuscator",
+  "name": "Prometheus Lua Obfuscator 2026",
   "short_name": "Prometheus",
-  "description": "Professional Lua obfuscator for Roblox scripts. Military-grade encryption, executor compatible.",
+  "description": "Professional Lua obfuscator for Roblox scripts. Multi-key XOR encryption, compatible with all 2026 executors.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#09090b",

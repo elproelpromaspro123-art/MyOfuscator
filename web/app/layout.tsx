@@ -6,21 +6,24 @@ const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://prometheus-obfuscator.vercel.app'),
-  title: 'Prometheus - Professional Lua Obfuscator for Roblox',
-  description: 'Protect your Roblox scripts with military-grade encryption. Free Lua obfuscator compatible with Delta, Velocity, Xeno, and all modern executors. Multi-key XOR, control flow obfuscation, anti-dump protection.',
+  title: 'Prometheus 2026 - Professional Lua Obfuscator for Roblox',
+  description: 'Protect your Roblox scripts with professional-grade obfuscation. Free Lua obfuscator compatible with Delta, Velocity, Xeno, Wave, and all 2026 executors. Multi-key XOR, control flow flattening, anti-tamper protection.',
   keywords: [
-    'lua obfuscator',
+    'lua obfuscator 2026',
     'roblox obfuscator',
     'luau obfuscator',
     'roblox script protection',
     'lua encryption',
-    'roblox executor',
+    'roblox executor 2026',
     'delta executor',
     'velocity executor',
     'xeno executor',
+    'wave executor',
     'free lua obfuscator',
     'script obfuscation',
     'code protection',
+    'control flow flattening',
+    'multi-key xor',
   ],
   authors: [{ name: 'Prometheus', url: 'https://prometheus-obfuscator.vercel.app' }],
   creator: 'Prometheus',
@@ -40,9 +43,9 @@ export const metadata: Metadata = {
     type: 'website',
     locale: 'en_US',
     url: 'https://prometheus-obfuscator.vercel.app',
-    siteName: 'Prometheus Lua Obfuscator',
-    title: 'Prometheus - Professional Lua Obfuscator for Roblox',
-    description: 'Protect your Roblox scripts with military-grade encryption. Free, fast, and executor-compatible.',
+    siteName: 'Prometheus Lua Obfuscator 2026',
+    title: 'Prometheus 2026 - Professional Lua Obfuscator for Roblox',
+    description: 'Protect your Roblox scripts with professional-grade obfuscation. Free, fast, and compatible with all 2026 executors.',
     images: [
       {
         url: '/og-image.png',
@@ -54,8 +57,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Prometheus - Professional Lua Obfuscator for Roblox',
-    description: 'Protect your Roblox scripts with military-grade encryption. Free and executor-compatible.',
+    title: 'Prometheus 2026 - Professional Lua Obfuscator',
+    description: 'Free professional Lua obfuscator for Roblox. Compatible with all 2026 executors.',
     images: ['/og-image.png'],
   },
   icons: {

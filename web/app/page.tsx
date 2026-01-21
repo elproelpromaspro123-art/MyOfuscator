@@ -90,17 +90,22 @@ export default function Home() {
           <div className="text-center mb-12">
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#151519] border border-[#1f1f28] text-sm text-zinc-400 mb-6">
               <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-              Now with Multi-Key Encryption
+              2026 Edition • Professional Obfuscation
             </div>
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-4">
               <span className="gradient-text">Professional Lua</span>
               <br />
-              Obfuscator
+              <span className="text-white">Obfuscator</span>
             </h1>
-            <p className="text-lg text-zinc-400 max-w-2xl mx-auto leading-relaxed">
-              Protect your Roblox scripts with military-grade encryption.
-              Compatible with Delta, Velocity, Xeno, and all modern executors.
+            <p className="text-lg text-zinc-400 max-w-2xl mx-auto leading-relaxed mb-6">
+              Protect your Roblox scripts with professional-grade obfuscation.
+              Compatible with Delta, Velocity, Xeno, Wave, and all 2026 executors.
             </p>
+            <div className="flex flex-wrap justify-center gap-3 text-sm">
+              <span className="px-3 py-1 rounded-full bg-green-500/10 text-green-400 border border-green-500/20">✓ 100% Free</span>
+              <span className="px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">✓ No Signup</span>
+              <span className="px-3 py-1 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">✓ Client-Side</span>
+            </div>
           </div>
         </div>
       </section>
@@ -227,33 +232,33 @@ export default function Home() {
             {[
               {
                 icon: '🔐',
-                title: 'Multi-Key Encryption',
-                desc: 'Rolling XOR encryption with multiple keys makes reverse engineering extremely difficult.'
+                title: 'Multi-Key XOR Encryption',
+                desc: 'Up to 4 rolling XOR keys with string caching. Professional-grade encryption.'
               },
               {
                 icon: '⚡',
-                title: 'Executor Compatible',
-                desc: 'Works flawlessly with Delta, Velocity, Xeno, Synapse, and all modern executors.'
+                title: '100% Executor Compatible',
+                desc: 'Tested with Delta, Velocity, Xeno, Synapse, and all modern 2026 executors.'
               },
               {
                 icon: '🛡️',
-                title: 'Anti-Tamper Protection',
-                desc: 'Built-in checks detect and prevent code modification attempts.'
+                title: 'Anti-Tamper & Env Checks',
+                desc: 'Runtime integrity verification and environment validation protect your code.'
               },
               {
                 icon: '🔀',
-                title: 'Control Flow Obfuscation',
-                desc: 'State-machine based control flow makes static analysis nearly impossible.'
+                title: 'Control Flow Flattening',
+                desc: 'State-machine dispatch with shuffled states defeats static analysis tools.'
               },
               {
                 icon: '📦',
-                title: 'String Table Encryption',
-                desc: 'All strings (including URLs) are encrypted and hidden from prying eyes.'
+                title: 'Complete String Hiding',
+                desc: 'All strings including URLs and API keys are encrypted and invisible.'
               },
               {
                 icon: '🚀',
-                title: 'Zero Dependencies',
-                desc: 'Client-side processing. Your code never leaves your browser.'
+                title: 'Private & Secure',
+                desc: '100% client-side processing. Your code never leaves your browser.'
               },
             ].map((feature, i) => (
               <div key={i} className="card-glow p-6">
@@ -289,14 +294,15 @@ export default function Home() {
               </thead>
               <tbody>
                 {[
-                  { feature: 'Executor Compatible', prometheus: true, others: 'partial' },
-                  { feature: 'URL Encryption', prometheus: true, others: false },
-                  { feature: 'Multi-Key XOR', prometheus: true, others: false },
-                  { feature: 'Control Flow Obfuscation', prometheus: true, others: 'partial' },
-                  { feature: 'Anti-Tamper Checks', prometheus: true, others: 'partial' },
-                  { feature: 'Client-Side Processing', prometheus: true, others: 'partial' },
-                  { feature: 'Free to Use', prometheus: true, others: 'partial' },
+                  { feature: '2026 Executor Compatible', prometheus: true, others: 'partial' },
+                  { feature: 'Complete String Encryption', prometheus: true, others: false },
+                  { feature: 'Multi-Key XOR (up to 4)', prometheus: true, others: false },
+                  { feature: 'Control Flow Flattening', prometheus: true, others: 'partial' },
+                  { feature: 'Anti-Tamper + Env Checks', prometheus: true, others: 'partial' },
+                  { feature: '100% Client-Side', prometheus: true, others: 'partial' },
+                  { feature: 'Completely Free', prometheus: true, others: 'partial' },
                   { feature: 'No Rate Limits', prometheus: true, others: false },
+                  { feature: 'Opaque Predicates', prometheus: true, others: false },
                 ].map((row, i) => (
                   <tr key={i}>
                     <td className="text-zinc-300">{row.feature}</td>
@@ -339,23 +345,27 @@ export default function Home() {
             {[
               {
                 q: 'Which executors are supported?',
-                a: 'Prometheus works with all modern Roblox executors including Delta, Velocity, Xeno, Synapse, and more. We use bit32 operations and IIFE wrappers for maximum compatibility.'
+                a: 'Prometheus 2026 works with all modern executors including Delta, Velocity, Xeno, Synapse, Wave, and more. We use bit32 operations and IIFE wrappers for maximum compatibility.'
               },
               {
                 q: 'Why isn\'t my script working after obfuscation?',
-                a: 'Try a lower protection level first. Some scripts with very dynamic code might need adjustments. If issues persist, the Low preset is the safest option.'
+                a: 'Try a lower protection level first (Low or Medium). Complex scripts with dynamic loading usually work best at Medium. If issues persist, ensure your original script runs correctly first.'
               },
               {
                 q: 'Is my code stored anywhere?',
-                a: 'No. All obfuscation happens entirely in your browser. Your code never leaves your device and is never sent to any server.'
+                a: 'No. All obfuscation happens 100% in your browser. Your code never leaves your device and is never sent to any server. We have zero logging.'
               },
               {
                 q: 'Can obfuscated code be reversed?',
-                a: 'While no obfuscation is 100% unbreakable, Prometheus uses multiple layers of encryption and obfuscation that make reverse engineering extremely time-consuming and difficult.'
+                a: 'While no obfuscation is theoretically unbreakable, Prometheus uses professional techniques (multi-key XOR, control flow flattening, opaque predicates) that make reverse engineering extremely difficult and time-consuming.'
               },
               {
                 q: 'What\'s the difference between protection levels?',
-                a: 'Low uses basic encoding. Medium adds XOR encryption. High adds multi-key encryption and control flow. Maximum adds everything including string shuffling and triple XOR.'
+                a: 'Low: Single-key XOR + junk code. Medium: Multi-key XOR + variable renaming. High: Control flow flattening + anti-tamper. Maximum: All techniques + quad-key encryption + triple IIFE nesting.'
+              },
+              {
+                q: 'Does this work with loadstring scripts?',
+                a: 'Yes! Scripts that use loadstring(game:HttpGet(...))() work perfectly. The obfuscator encrypts all strings including URLs while preserving script functionality.'
               },
             ].map((faq, i) => (
               <div key={i} className="card p-6">

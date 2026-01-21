@@ -72,7 +72,7 @@ export default function Footer() {
         {/* Bottom */}
         <div className="pt-8 border-t border-[#1f1f28] flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2 text-sm text-zinc-600">
-            <span>© 2024 Prometheus Obfuscator</span>
+            <span>© 2026 Prometheus Obfuscator</span>
             <span className="text-zinc-700">•</span>
             <span>Built for Roblox / LuaU</span>
           </div>

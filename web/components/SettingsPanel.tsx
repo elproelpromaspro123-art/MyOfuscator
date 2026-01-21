@@ -8,27 +8,27 @@ interface Props {
 }
 
 const presets = [
-  { value: 'Low', label: 'Low', desc: 'Basic protection', strength: 25, color: '#22c55e' },
-  { value: 'Medium', label: 'Medium', desc: 'XOR + Name obfuscation', strength: 50, color: '#eab308' },
-  { value: 'High', label: 'High', desc: 'Control flow + Anti-dump', strength: 75, color: '#f97316' },
-  { value: 'Maximum', label: 'Maximum', desc: 'VM wrapper + Full protection', strength: 100, color: '#ef4444' },
+  { value: 'Low', label: 'Low', desc: 'Single-key XOR + Junk code', strength: 25, color: '#22c55e' },
+  { value: 'Medium', label: 'Medium', desc: 'Multi-key XOR + Name obfuscation', strength: 50, color: '#eab308' },
+  { value: 'High', label: 'High', desc: 'Control flow + Anti-tamper', strength: 75, color: '#f97316' },
+  { value: 'Maximum', label: 'Maximum', desc: 'Maximum protection + All layers', strength: 100, color: '#ef4444' },
 ] as const
 
 const features = [
-  { name: 'String Encryption', levels: [1, 2, 3, 4] },
-  { name: 'UTF-8 Encoding', levels: [1, 2, 3, 4] },
+  { name: 'String Encryption (XOR)', levels: [1, 2, 3, 4] },
+  { name: 'String Caching', levels: [1, 2, 3, 4] },
   { name: 'Junk Code Injection', levels: [1, 2, 3, 4] },
   { name: 'IIFE Wrapping', levels: [1, 2, 3, 4] },
-  { name: 'Multi-Key XOR', levels: [2, 3, 4] },
-  { name: 'Name Obfuscation', levels: [2, 3, 4] },
-  { name: 'Environment Check', levels: [2, 3, 4] },
+  { name: 'Minification', levels: [1, 2, 3, 4] },
+  { name: 'Multi-Key XOR (2 keys)', levels: [2, 3, 4] },
+  { name: 'Variable Renaming', levels: [2, 3, 4] },
+  { name: 'Environment Checks', levels: [2, 3, 4] },
   { name: 'Opaque Predicates', levels: [2, 3, 4] },
-  { name: 'Anti-Dump Protection', levels: [3, 4] },
-  { name: 'Heavy Control Flow', levels: [3, 4] },
+  { name: 'Anti-Tamper Checks', levels: [3, 4] },
+  { name: 'Control Flow Flattening', levels: [3, 4] },
   { name: 'String Table Shuffle', levels: [3, 4] },
-  { name: 'VM Wrapper', levels: [4] },
-  { name: 'Runtime Mutation', levels: [4] },
-  { name: 'Quad-Key Encryption', levels: [4] },
+  { name: 'Triple IIFE Nesting', levels: [4] },
+  { name: 'Quad-Key XOR (4 keys)', levels: [4] },
 ]
 
 export default function SettingsPanel({ settings, onChange }: Props) {
