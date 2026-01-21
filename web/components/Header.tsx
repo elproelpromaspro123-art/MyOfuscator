@@ -5,7 +5,7 @@ import Link from 'next/link'
 export default function Header() {
   return (
     <header className="sticky top-0 z-50 border-b border-[#1f1f28] bg-[#0a0a0c]/80 backdrop-blur-xl">
-      <div className="container mx-auto px-4 max-w-6xl">
+      <div className="container mx-auto px-4 max-w-5xl">
         <div className="flex items-center justify-between h-16">
           <Link href="/" className="flex items-center gap-2 group">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#6366f1] to-[#a855f7] flex items-center justify-center shadow-lg shadow-[#6366f1]/20 group-hover:shadow-[#6366f1]/40 transition-shadow">
@@ -14,15 +14,14 @@ export default function Header() {
               </svg>
             </div>
             <span className="text-xl font-bold bg-gradient-to-r from-[#6366f1] to-[#a855f7] bg-clip-text text-transparent">Prometheus</span>
-            <span className="text-xs text-zinc-500 hidden sm:inline">by Levno_710</span>
           </Link>
           
           <nav className="hidden md:flex items-center gap-6 text-sm">
             <a href="#features" className="text-zinc-400 hover:text-white transition-colors">
               Features
             </a>
-            <a href="#comparison" className="text-zinc-400 hover:text-white transition-colors">
-              Comparison
+            <a href="#compatibility" className="text-zinc-400 hover:text-white transition-colors">
+              Compatibility
             </a>
             <a href="#faq" className="text-zinc-400 hover:text-white transition-colors">
               FAQ
@@ -39,10 +38,10 @@ export default function Header() {
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
               </svg>
-              Scripts Hub
+              <span className="hidden sm:inline">Scripts Hub</span>
             </a>
             <a 
-              href="https://github.com/elproelpromaspro123-art/MyOfuscator" 
+              href="https://github.com/prometheus-lua/Prometheus" 
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#151519] border border-[#1f1f28] text-sm text-zinc-400 hover:text-white hover:border-[#2a2a38] transition-colors"

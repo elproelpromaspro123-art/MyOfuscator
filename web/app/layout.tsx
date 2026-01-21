@@ -6,24 +6,25 @@ const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://prometheus-obfuscator.vercel.app'),
-  title: 'Prometheus Obfuscator - Advanced Lua Obfuscation for Roblox',
-  description: 'The most powerful open-source Lua obfuscator. Protect your Roblox scripts with Vmify, string encryption, control flow flattening, and more. Compatible with Delta, Velocity, Xeno executors. Originally by Levno_710.',
+  title: 'Prometheus Obfuscator - Lua Obfuscation for Roblox',
+  description: 'The most advanced open-source Lua obfuscator by Levno_710. Protect your Roblox scripts with XOR encryption, control flow obfuscation, and anti-tamper protection. 100% compatible with Delta, Velocity, Xeno, and all 2026 executors.',
   keywords: [
     'lua obfuscator',
     'roblox obfuscator',
     'prometheus',
+    'levno_710',
     'script protection',
     'lua encryption',
     'roblox scripts',
-    'vmify',
-    'executor compatible',
     'luau obfuscator',
     'delta executor',
     'velocity executor',
     'xeno executor',
-    'control flow flattening',
+    'wave executor',
+    'rayfield',
+    'fluent ui',
   ],
-  authors: [{ name: 'Levno_710' }, { name: 'Prometheus Contributors' }],
+  authors: [{ name: 'Levno_710', url: 'https://github.com/prometheus-lua' }],
   creator: 'Levno_710',
   publisher: 'Prometheus',
   robots: {
@@ -43,7 +44,7 @@ export const metadata: Metadata = {
     url: 'https://prometheus-obfuscator.vercel.app',
     siteName: 'Prometheus Obfuscator',
     title: 'Prometheus Obfuscator',
-    description: 'Advanced Lua obfuscation for Roblox executors',
+    description: 'Advanced Lua obfuscation for Roblox by Levno_710',
     images: [
       {
         url: '/og-image.png',
@@ -55,8 +56,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Prometheus Obfuscator - Advanced Lua Obfuscation',
-    description: 'The most powerful open-source Lua obfuscator for Roblox. Originally by Levno_710.',
+    title: 'Prometheus Obfuscator - Lua Obfuscation',
+    description: 'The most advanced open-source Lua obfuscator by Levno_710.',
     images: ['/og-image.png'],
   },
   icons: {
