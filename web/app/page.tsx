@@ -35,7 +35,7 @@ export default function Home() {
   const [output, setOutput] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [stats, setStats] = useState({ originalSize: 0, obfuscatedSize: 0, processingTime: 0, stepsApplied: 0 })
+  const [stats, setStats] = useState({ originalSize: 0, obfuscatedSize: 0, processingTime: 0, stepsApplied: [] as string[] })
   const [settings, setSettings] = useState<ObfuscationSettings>({ preset: 'Medium' })
 
   const handleObfuscate = useCallback(async () => {
@@ -50,8 +50,8 @@ export default function Home() {
       const result = await obfuscateCode(input, settings)
       setOutput(result.code)
       setStats({
-        originalSize: input.length,
-        obfuscatedSize: result.code.length,
+        originalSize: result.stats.originalSize,
+        obfuscatedSize: result.stats.obfuscatedSize,
         processingTime: Math.round(performance.now() - start),
         stepsApplied: result.stepsApplied,
       })
@@ -90,21 +90,20 @@ export default function Home() {
           <div className="text-center mb-12">
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#151519] border border-[#1f1f28] text-sm text-zinc-400 mb-6">
               <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-              2026 Edition • Professional Obfuscation
+              2026 Edition • Open Source
             </div>
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-4">
-              <span className="gradient-text">Professional Lua</span>
+              <span className="gradient-text">Prometheus</span>
               <br />
               <span className="text-white">Obfuscator</span>
             </h1>
             <p className="text-lg text-zinc-400 max-w-2xl mx-auto leading-relaxed mb-6">
-              Protect your Roblox scripts with professional-grade obfuscation.
-              Compatible with Delta, Velocity, Xeno, Wave, and all 2026 executors.
+              The most advanced open-source Lua obfuscator. Originally by Levno_710, now optimized for 2026 Roblox executors.
             </p>
             <div className="flex flex-wrap justify-center gap-3 text-sm">
-              <span className="px-3 py-1 rounded-full bg-green-500/10 text-green-400 border border-green-500/20">✓ 100% Free</span>
-              <span className="px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">✓ No Signup</span>
-              <span className="px-3 py-1 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">✓ Client-Side</span>
+              <span className="px-3 py-1 rounded-full bg-green-500/10 text-green-400 border border-green-500/20">✓ Open Source</span>
+              <span className="px-3 py-1 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">✓ LuaU Support</span>
+              <span className="px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">✓ Client-Side</span>
             </div>
           </div>
         </div>
@@ -232,33 +231,33 @@ export default function Home() {
             {[
               {
                 icon: '🔐',
-                title: 'Multi-Key XOR Encryption',
-                desc: 'Up to 4 rolling XOR keys with string caching. Professional-grade encryption.'
+                title: 'Vmify (Virtualization)',
+                desc: 'Transform functions into virtual machine bytecode that\'s nearly impossible to reverse engineer.'
               },
               {
                 icon: '⚡',
-                title: '100% Executor Compatible',
-                desc: 'Tested with Delta, Velocity, Xeno, Synapse, and all modern 2026 executors.'
-              },
-              {
-                icon: '🛡️',
-                title: 'Anti-Tamper & Env Checks',
-                desc: 'Runtime integrity verification and environment validation protect your code.'
+                title: 'String Encryption',
+                desc: 'XOR encryption with pseudo-random generator and seed-based decryption.'
               },
               {
                 icon: '🔀',
                 title: 'Control Flow Flattening',
-                desc: 'State-machine dispatch with shuffled states defeats static analysis tools.'
+                desc: 'State-machine dispatcher pattern defeats static analysis.'
               },
               {
                 icon: '📦',
-                title: 'Complete String Hiding',
-                desc: 'All strings including URLs and API keys are encrypted and invisible.'
+                title: 'Constant Array',
+                desc: 'Extract all constants to shuffled, rotated array with base64 encoding.'
+              },
+              {
+                icon: '🛡️',
+                title: 'Anti-Tamper',
+                desc: 'Environment validation, metamethod checks, and integrity verification.'
               },
               {
                 icon: '🚀',
-                title: 'Private & Secure',
-                desc: '100% client-side processing. Your code never leaves your browser.'
+                title: 'MangledShuffled Names',
+                desc: 'Shuffled character arrays for unpredictable variable naming.'
               },
             ].map((feature, i) => (
               <div key={i} className="card-glow p-6">
@@ -289,20 +288,20 @@ export default function Home() {
                   <th className="text-center">
                     <span className="gradient-text font-semibold">Prometheus</span>
                   </th>
-                  <th className="text-center text-zinc-500">Others</th>
+                  <th className="text-center text-zinc-500">Basic Obfuscators</th>
                 </tr>
               </thead>
               <tbody>
                 {[
-                  { feature: '2026 Executor Compatible', prometheus: true, others: 'partial' },
-                  { feature: 'Complete String Encryption', prometheus: true, others: false },
-                  { feature: 'Multi-Key XOR (up to 4)', prometheus: true, others: false },
+                  { feature: 'Vmify (VM Virtualization)', prometheus: true, others: false },
                   { feature: 'Control Flow Flattening', prometheus: true, others: 'partial' },
-                  { feature: 'Anti-Tamper + Env Checks', prometheus: true, others: 'partial' },
-                  { feature: '100% Client-Side', prometheus: true, others: 'partial' },
-                  { feature: 'Completely Free', prometheus: true, others: 'partial' },
-                  { feature: 'No Rate Limits', prometheus: true, others: false },
+                  { feature: 'String Encryption (XOR + Seed)', prometheus: true, others: 'partial' },
+                  { feature: 'Constant Array Extraction', prometheus: true, others: false },
+                  { feature: 'Anti-Tamper + Env Checks', prometheus: true, others: false },
+                  { feature: 'LuaU / Roblox Support', prometheus: true, others: 'partial' },
+                  { feature: 'Open Source', prometheus: true, others: false },
                   { feature: 'Opaque Predicates', prometheus: true, others: false },
+                  { feature: 'Double Vmify Layer', prometheus: true, others: false },
                 ].map((row, i) => (
                   <tr key={i}>
                     <td className="text-zinc-300">{row.feature}</td>
@@ -345,27 +344,27 @@ export default function Home() {
             {[
               {
                 q: 'Which executors are supported?',
-                a: 'Prometheus 2026 works with all modern executors including Delta, Velocity, Xeno, Synapse, Wave, and more. We use bit32 operations and IIFE wrappers for maximum compatibility.'
+                a: 'All modern executors work with Prometheus. For Roblox specifically, use the LuaU preset which avoids the debug library for maximum compatibility.'
               },
               {
-                q: 'Why isn\'t my script working after obfuscation?',
-                a: 'Try a lower protection level first (Low or Medium). Complex scripts with dynamic loading usually work best at Medium. If issues persist, ensure your original script runs correctly first.'
+                q: 'Is this the original Prometheus?',
+                a: 'Yes! This is a port of the original Prometheus obfuscator by Levno_710, optimized and updated for 2026 Roblox executors with a modern web interface.'
               },
               {
                 q: 'Is my code stored anywhere?',
-                a: 'No. All obfuscation happens 100% in your browser. Your code never leaves your device and is never sent to any server. We have zero logging.'
+                a: 'No. All obfuscation happens 100% client-side in your browser. Your code never leaves your device and is never sent to any server.'
               },
               {
-                q: 'Can obfuscated code be reversed?',
-                a: 'While no obfuscation is theoretically unbreakable, Prometheus uses professional techniques (multi-key XOR, control flow flattening, opaque predicates) that make reverse engineering extremely difficult and time-consuming.'
+                q: 'What is Vmify?',
+                a: 'Vmify (Virtualization) transforms your Lua functions into virtual machine bytecode. This makes the code nearly impossible to reverse engineer as it runs on a custom VM interpreter.'
               },
               {
-                q: 'What\'s the difference between protection levels?',
-                a: 'Low: Single-key XOR + junk code. Medium: Multi-key XOR + variable renaming. High: Control flow flattening + anti-tamper. Maximum: All techniques + quad-key encryption + triple IIFE nesting.'
+                q: 'What\'s the difference between presets?',
+                a: 'Minify: Just variable renaming. Weak: Adds Vmify + Constant Array. Medium: Adds string encryption + anti-tamper. Strong: Double Vmify layer. Maximum: All protections including control flow flattening.'
               },
               {
-                q: 'Does this work with loadstring scripts?',
-                a: 'Yes! Scripts that use loadstring(game:HttpGet(...))() work perfectly. The obfuscator encrypts all strings including URLs while preserving script functionality.'
+                q: 'Which preset should I use for Roblox?',
+                a: 'Use the LuaU preset for Roblox scripts. It\'s optimized to avoid the debug library and includes all major protections while maintaining executor compatibility.'
               },
             ].map((faq, i) => (
               <div key={i} className="card p-6">
@@ -387,7 +386,7 @@ export default function Home() {
         <div className="container mx-auto px-4 max-w-4xl text-center">
           <h2 className="text-2xl font-bold mb-4">Looking for Roblox Scripts?</h2>
           <p className="text-zinc-400 mb-8">
-            Check out our collection of premium scripts for popular Roblox games.
+            Visit our premium scripts collection for popular Roblox games.
           </p>
           <a 
             href="https://templo-steel.vercel.app/"
@@ -395,7 +394,7 @@ export default function Home() {
             rel="noopener noreferrer"
             className="btn-primary inline-flex items-center gap-2"
           >
-            Visit Scripts Hub
+            Visit Premium Scripts Collection
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
             </svg>

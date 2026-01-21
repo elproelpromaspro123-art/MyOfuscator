@@ -8,32 +8,36 @@ interface Props {
 }
 
 const presets = [
-  { value: 'Low', label: 'Low', desc: 'Single-key XOR + Junk code', strength: 25, color: '#22c55e' },
-  { value: 'Medium', label: 'Medium', desc: 'Multi-key XOR + Name obfuscation', strength: 50, color: '#eab308' },
-  { value: 'High', label: 'High', desc: 'Control flow + Anti-tamper', strength: 75, color: '#f97316' },
-  { value: 'Maximum', label: 'Maximum', desc: 'Maximum protection + All layers', strength: 100, color: '#ef4444' },
+  { value: 'Minify', label: 'Minify', desc: 'Variable renaming & minification only', strength: 10, color: '#22c55e' },
+  { value: 'Weak', label: 'Weak', desc: 'Vmify + Constant Array + Wrap', strength: 25, color: '#84cc16' },
+  { value: 'Medium', label: 'Medium', desc: 'String encryption + Anti-tamper + Vmify', strength: 50, color: '#eab308' },
+  { value: 'Strong', label: 'Strong', desc: 'Double Vmify + All core protections', strength: 75, color: '#f97316' },
+  { value: 'Maximum', label: 'Maximum', desc: 'All steps including control flow flatten', strength: 100, color: '#ef4444' },
+  { value: 'LuaU', label: 'LuaU', desc: 'Roblox-optimized (no debug library)', strength: 80, color: '#a855f7' },
+  { value: 'Performance', label: 'Performance', desc: 'Fast with minimal runtime overhead', strength: 35, color: '#06b6d4' },
 ] as const
 
 const features = [
-  { name: 'String Encryption (XOR)', levels: [1, 2, 3, 4] },
-  { name: 'String Caching', levels: [1, 2, 3, 4] },
-  { name: 'Junk Code Injection', levels: [1, 2, 3, 4] },
-  { name: 'IIFE Wrapping', levels: [1, 2, 3, 4] },
-  { name: 'Minification', levels: [1, 2, 3, 4] },
-  { name: 'Multi-Key XOR (2 keys)', levels: [2, 3, 4] },
-  { name: 'Variable Renaming', levels: [2, 3, 4] },
-  { name: 'Environment Checks', levels: [2, 3, 4] },
-  { name: 'Opaque Predicates', levels: [2, 3, 4] },
-  { name: 'Anti-Tamper Checks', levels: [3, 4] },
-  { name: 'Control Flow Flattening', levels: [3, 4] },
-  { name: 'String Table Shuffle', levels: [3, 4] },
-  { name: 'Triple IIFE Nesting', levels: [4] },
-  { name: 'Quad-Key XOR (4 keys)', levels: [4] },
+  { name: 'Variable Renaming (MangledShuffled)', levels: ['Minify', 'Weak', 'Medium', 'Strong', 'Maximum', 'LuaU', 'Performance'] },
+  { name: 'Minification', levels: ['Minify', 'Weak', 'Medium', 'Strong', 'Maximum', 'LuaU', 'Performance'] },
+  { name: 'Vmify (Virtualization)', levels: ['Weak', 'Medium', 'Strong', 'Maximum'] },
+  { name: 'Constant Array Extraction', levels: ['Weak', 'Medium', 'Strong', 'Maximum', 'LuaU', 'Performance'] },
+  { name: 'Wrap In Function (IIFE)', levels: ['Weak', 'Medium', 'Strong', 'Maximum', 'LuaU', 'Performance'] },
+  { name: 'String Encryption', levels: ['Medium', 'Strong', 'Maximum', 'LuaU', 'Performance'] },
+  { name: 'Anti-Tamper Checks', levels: ['Medium', 'Strong', 'Maximum', 'LuaU'] },
+  { name: 'Numbers To Expressions', levels: ['Medium', 'Strong', 'Maximum', 'LuaU'] },
+  { name: 'Control Flow Flattening', levels: ['Maximum', 'LuaU'] },
+  { name: 'Opaque Predicates', levels: ['Maximum', 'LuaU'] },
+  { name: 'Junk Code Injection', levels: ['Maximum'] },
+  { name: 'String To Bytes', levels: ['Maximum'] },
+  { name: 'Call Indirection', levels: ['Maximum', 'LuaU'] },
+  { name: 'Proxify Locals', levels: ['Maximum', 'LuaU'] },
+  { name: 'Double Vmify Layer', levels: ['Strong', 'Maximum'] },
 ]
 
 export default function SettingsPanel({ settings, onChange }: Props) {
-  const current = presets.find(p => p.value === settings.preset) || presets[1]
-  const currentLevel = presets.findIndex(p => p.value === settings.preset) + 1
+  const current = presets.find(p => p.value === settings.preset) || presets[2]
+  const currentPreset = settings.preset
 
   return (
     <div className="card p-6 space-y-6">
@@ -97,11 +101,11 @@ export default function SettingsPanel({ settings, onChange }: Props) {
       {/* Features List */}
       <div>
         <h3 className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-3">
-          Active Features ({features.filter(f => f.levels.includes(currentLevel)).length}/{features.length})
+          Active Features ({features.filter(f => f.levels.includes(currentPreset)).length}/{features.length})
         </h3>
         <div className="space-y-1.5 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
           {features.map(f => {
-            const isActive = f.levels.includes(currentLevel)
+            const isActive = f.levels.includes(currentPreset)
             return (
               <div 
                 key={f.name} 

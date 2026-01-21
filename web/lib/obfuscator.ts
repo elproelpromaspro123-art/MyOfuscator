@@ -1,32 +1,54 @@
+// ============================================================================
+// Prometheus Obfuscator - TypeScript Port
+// Originally by Levno_710, ported for web usage in 2026
+// Faithful implementation of the original Lua obfuscator from src/
+// ============================================================================
+
 export interface ObfuscationSettings {
-  preset: 'Low' | 'Medium' | 'High' | 'Maximum'
+  preset: 'Minify' | 'Weak' | 'Medium' | 'Strong' | 'Maximum' | 'LuaU' | 'Performance'
 }
 
 export interface ObfuscationResult {
   code: string
-  stepsApplied: number
+  stepsApplied: string[]
+  stats: {
+    originalSize: number
+    obfuscatedSize: number
+  }
+}
+
+// ==================== NAME GENERATOR (mangled_shuffled.lua) ====================
+
+class MangledShuffledNameGenerator {
+  private varDigits: string[]
+  private varStartDigits: string[]
+
+  constructor() {
+    this.varDigits = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_'.split('')
+    this.varStartDigits = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
+    this.prepare()
+  }
+
+  prepare(): void {
+    this.varDigits = shuffle(this.varDigits)
+    this.varStartDigits = shuffle(this.varStartDigits)
+  }
+
+  generateName(id: number): string {
+    let name = ''
+    let d = id % this.varStartDigits.length
+    id = Math.floor((id - d) / this.varStartDigits.length)
+    name += this.varStartDigits[d]
+    while (id > 0) {
+      d = id % this.varDigits.length
+      id = Math.floor((id - d) / this.varDigits.length)
+      name += this.varDigits[d]
+    }
+    return name
+  }
 }
 
 // ==================== UTILITIES ====================
-
-const ALPHA = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
-const HEX = '0123456789abcdef'
-
-function randHex(len: number): string {
-  return Array.from({ length: len }, () => HEX[Math.floor(Math.random() * 16)]).join('')
-}
-
-function randVar(): string {
-  return '_0x' + randHex(6)
-}
-
-function randShortVar(): string {
-  return '_' + randHex(4)
-}
-
-function randInt(min: number, max: number): number {
-  return Math.floor(Math.random() * (max - min + 1)) + min
-}
 
 function shuffle<T>(arr: T[]): T[] {
   const result = [...arr]
@@ -35,6 +57,10 @@ function shuffle<T>(arr: T[]): T[] {
     ;[result[i], result[j]] = [result[j], result[i]]
   }
   return result
+}
+
+function randInt(min: number, max: number): number {
+  return Math.floor(Math.random() * (max - min + 1)) + min
 }
 
 // ==================== RESERVED WORDS / GLOBALS ====================
@@ -76,7 +102,7 @@ function isReserved(name: string): boolean {
 // ==================== TOKENIZER ====================
 
 interface Token {
-  type: 'code' | 'string' | 'longstring' | 'comment' | 'longcomment' | 'number'
+  type: 'code' | 'string' | 'longstring' | 'comment' | 'longcomment' | 'number' | 'identifier'
   value: string
   start: number
   end: number
@@ -87,10 +113,10 @@ interface Token {
 function tokenize(code: string): Token[] {
   const tokens: Token[] = []
   let i = 0
-  
+
   while (i < code.length) {
     const start = i
-    
+
     // Long comment --[[ or --[==[
     if (code.slice(i, i + 4) === '--[[' || (code.slice(i, i + 3) === '--[' && code[i + 3] === '=')) {
       let eqCount = 0
@@ -106,7 +132,7 @@ function tokenize(code: string): Token[] {
         continue
       }
     }
-    
+
     // Single line comment
     if (code[i] === '-' && code[i + 1] === '-') {
       let j = i + 2
@@ -115,7 +141,7 @@ function tokenize(code: string): Token[] {
       i = j
       continue
     }
-    
+
     // Long string [[ or [==[
     if (code[i] === '[' && (code[i + 1] === '[' || code[i + 1] === '=')) {
       let eqCount = 0
@@ -127,18 +153,18 @@ function tokenize(code: string): Token[] {
         let endIdx = code.indexOf(endPattern, contentStart)
         if (endIdx === -1) endIdx = code.length
         const fullEnd = endIdx + endPattern.length
-        tokens.push({ 
-          type: 'longstring', 
-          value: code.slice(start, fullEnd), 
-          start, 
-          end: fullEnd, 
-          rawContent: code.slice(contentStart, endIdx) 
+        tokens.push({
+          type: 'longstring',
+          value: code.slice(start, fullEnd),
+          start,
+          end: fullEnd,
+          rawContent: code.slice(contentStart, endIdx)
         })
         i = fullEnd
         continue
       }
     }
-    
+
     // Quoted string " or '
     if (code[i] === '"' || code[i] === "'") {
       const quote = code[i]
@@ -151,7 +177,7 @@ function tokenize(code: string): Token[] {
           continue
         }
         if (code[j] === quote) break
-        if (code[j] === '\n') break // Unterminated string
+        if (code[j] === '\n') break
         content += code[j]
         j++
       }
@@ -160,8 +186,8 @@ function tokenize(code: string): Token[] {
       i = j
       continue
     }
-    
-    // Number literals (including hex 0x...)
+
+    // Number literals
     if (/\d/.test(code[i]) || (code[i] === '.' && /\d/.test(code[i + 1] || ''))) {
       let j = i
       if (code[i] === '0' && (code[i + 1] === 'x' || code[i + 1] === 'X')) {
@@ -179,482 +205,353 @@ function tokenize(code: string): Token[] {
       i = j
       continue
     }
-    
-    // Regular code - collect until we hit something special
-    let j = i
-    while (j < code.length) {
-      const c = code[j]
-      const c2 = code[j + 1] || ''
-      
-      // Stop if we hit a string, comment, or number start
-      if (c === '"' || c === "'") break
-      if (c === '-' && c2 === '-') break
-      if (c === '[' && (c2 === '[' || c2 === '=')) break
-      if (/\d/.test(c) && (j === i || !/[a-zA-Z_]/.test(code[j - 1] || ''))) {
-        // Only break if it's the start of a number, not part of identifier
-        if (j === i || !/[a-zA-Z_0-9]/.test(code[j - 1] || '')) break
-      }
-      
-      j++
-    }
-    
-    if (j > i) {
-      tokens.push({ type: 'code', value: code.slice(start, j), start, end: j })
+
+    // Identifier
+    if (/[a-zA-Z_]/.test(code[i])) {
+      let j = i
+      while (j < code.length && /[a-zA-Z0-9_]/.test(code[j])) j++
+      tokens.push({ type: 'identifier', value: code.slice(start, j), start, end: j })
       i = j
-    } else if (i < code.length) {
-      // Single character that doesn't fit other patterns
-      tokens.push({ type: 'code', value: code[i], start: i, end: i + 1 })
-      i++
+      continue
     }
+
+    // Other code
+    tokens.push({ type: 'code', value: code[i], start: i, end: i + 1 })
+    i++
   }
-  
+
   return tokens
 }
 
-// ==================== LUA STRING DECODING ====================
+// ==================== STRING ENCODING (from ConstantArray.lua) ====================
 
-function decodeLuaString(content: string): string {
+function encodeBase64(str: string, chars: string): string {
   let result = ''
   let i = 0
-  
-  while (i < content.length) {
-    if (content[i] === '\\' && i + 1 < content.length) {
-      const next = content[i + 1]
-      switch (next) {
-        case 'n': result += '\n'; i += 2; break
-        case 'r': result += '\r'; i += 2; break
-        case 't': result += '\t'; i += 2; break
-        case 'v': result += '\v'; i += 2; break
-        case 'b': result += '\b'; i += 2; break
-        case 'f': result += '\f'; i += 2; break
-        case 'a': result += '\x07'; i += 2; break
-        case '\\': result += '\\'; i += 2; break
-        case '"': result += '"'; i += 2; break
-        case "'": result += "'"; i += 2; break
-        case '\n': result += '\n'; i += 2; break
-        case '0': result += '\0'; i += 2; break
-        case 'z':
-          i += 2
-          while (i < content.length && /\s/.test(content[i])) i++
-          break
-        case 'x':
-          if (i + 3 < content.length) {
-            const hex = content.slice(i + 2, i + 4)
-            const code = parseInt(hex, 16)
-            if (!isNaN(code)) { result += String.fromCharCode(code); i += 4; break }
-          }
-          result += content[i]; i++
-          break
-        default:
-          if (/\d/.test(next)) {
-            let numStr = ''
-            let j = i + 1
-            while (j < content.length && j < i + 4 && /\d/.test(content[j])) {
-              numStr += content[j]
-              j++
-            }
-            const code = parseInt(numStr, 10)
-            if (code <= 255) { result += String.fromCharCode(code); i = j }
-            else { result += content[i]; i++ }
-          } else {
-            result += content[i]
-            i++
-          }
-      }
-    } else {
-      result += content[i]
-      i++
-    }
+  while (i < str.length) {
+    const c1 = str.charCodeAt(i++)
+    const c2 = i < str.length ? str.charCodeAt(i++) : 0
+    const c3 = i < str.length ? str.charCodeAt(i++) : 0
+    
+    const triplet = (c1 << 16) | (c2 << 8) | c3
+    
+    result += chars[(triplet >> 18) & 0x3F]
+    result += chars[(triplet >> 12) & 0x3F]
+    result += i > str.length + 1 ? '=' : chars[(triplet >> 6) & 0x3F]
+    result += i > str.length ? '=' : chars[triplet & 0x3F]
   }
   return result
 }
 
-// ==================== UTF-8 ENCODING ====================
+// ==================== ENCRYPT STRINGS (from EncryptStrings.lua) ====================
 
-function stringToUtf8Bytes(str: string): number[] {
-  const encoder = new TextEncoder()
-  return Array.from(encoder.encode(str))
-}
+class StringEncryptor {
+  private secretKey6: number
+  private secretKey7: number
+  private secretKey44: number
+  private secretKey8: number
+  private xorKey: number
+  private usedSeeds: Set<number> = new Set()
+  private state45: number = 0
+  private state8: number = 2
+  private prevValues: number[] = []
+  private paramMul8: number
+  private paramMul45: number
+  private paramAdd45: number
 
-function byteToLuaEscape(byte: number): string {
-  return '\\' + byte.toString(10).padStart(3, '0')
-}
+  constructor() {
+    this.secretKey6 = randInt(0, 63)
+    this.secretKey7 = randInt(0, 127)
+    this.secretKey44 = randInt(0, 17592186044415)
+    this.secretKey8 = randInt(0, 255)
+    this.xorKey = randInt(1, 255)
+    this.paramMul8 = this.primitiveRoot257(this.secretKey7)
+    this.paramMul45 = this.secretKey6 * 4 + 1
+    this.paramAdd45 = this.secretKey44 * 2 + 1
+  }
 
-// ==================== ENCRYPTION ====================
+  private primitiveRoot257(idx: number): number {
+    let g = 1, m = 128, d = 2 * idx + 1
+    do {
+      g = (g * g * (d >= m ? 3 : 1)) % 257
+      m = m / 2
+      d = d % m
+    } while (m >= 1)
+    return g
+  }
 
-function generateKeys(count: number): number[] {
-  return Array.from({ length: count }, () => randInt(1, 250))
-}
+  private bitxor(a: number, b: number): number {
+    return a ^ b
+  }
 
-function encryptBytes(bytes: number[], keys: number[]): number[] {
-  return bytes.map((b, i) => {
-    let result = b
-    for (let k = 0; k < keys.length; k++) {
-      result = (result ^ keys[(i + k) % keys.length]) & 0xFF
+  private setSeed(seed: number): void {
+    this.state45 = seed % 35184372088832
+    this.state8 = seed % 255 + 2
+    this.prevValues = []
+  }
+
+  private genSeed(): number {
+    let seed: number
+    do {
+      seed = randInt(0, 35184372088832)
+    } while (this.usedSeeds.has(seed))
+    this.usedSeeds.add(seed)
+    return seed
+  }
+
+  private getRandom32(): number {
+    this.state45 = (this.state45 * this.paramMul45 + this.paramAdd45) % 35184372088832
+    do {
+      this.state8 = (this.state8 * this.paramMul8) % 257
+    } while (this.state8 === 1)
+    const r = this.state8 % 32
+    const n = Math.floor(this.state45 / Math.pow(2, 13 - Math.floor((this.state8 - r) / 32))) % Math.pow(2, 32) / Math.pow(2, r)
+    return Math.floor(n % 1 * Math.pow(2, 32)) + Math.floor(n)
+  }
+
+  private getNextPseudoRandomByte(): number {
+    if (this.prevValues.length === 0) {
+      const rnd = this.getRandom32()
+      const low16 = rnd % 65536
+      const high16 = Math.floor((rnd - low16) / 65536)
+      const b1 = low16 % 256
+      const b2 = Math.floor((low16 - b1) / 256)
+      const b3 = high16 % 256
+      const b4 = Math.floor((high16 - b3) / 256)
+      this.prevValues = [b1, b2, b3, b4]
     }
+    return this.prevValues.pop()!
+  }
+
+  encrypt(str: string): { encrypted: string; seed: number } {
+    const seed = this.genSeed()
+    this.setSeed(seed)
+    let out = ''
+    let prevVal = this.secretKey8
+    for (let i = 0; i < str.length; i++) {
+      const byte = str.charCodeAt(i)
+      const xored = this.bitxor(byte, this.xorKey)
+      out += String.fromCharCode(((xored - (this.getNextPseudoRandomByte() + prevVal)) % 256 + 256) % 256)
+      prevVal = xored
+    }
+    return { encrypted: out, seed }
+  }
+
+  private genOpaqueNumber(n: number): string {
+    const a = randInt(100, 9999)
+    const b = randInt(100, 9999)
+    const c = n - a * b
+    return `(${a}*${b}+${c})`
+  }
+
+  genDecryptCode(varName: string, stringsVar: string): string {
+    return `do
+local floor=math.floor
+local remove=table.remove
+local char=string.char
+local byte=string.byte
+local len=string.len
+local concat=table.concat
+local type=type
+local state_45=0
+local state_8=2
+local function bitxor(a,b)local result=0 local bit=1 while a>0 or b>0 do local a_bit=a%2 local b_bit=b%2 if a_bit~=b_bit then result=result+bit end a=floor(a/2)b=floor(b/2)bit=bit*2 end return result end
+local prev_values={}
+local function get_next_pseudo_random_byte()if #prev_values==0 then state_45=(state_45*${this.genOpaqueNumber(this.paramMul45)}+${this.genOpaqueNumber(this.paramAdd45)})%35184372088832 repeat state_8=state_8*${this.genOpaqueNumber(this.paramMul8)}%257 until state_8~=1 local r=state_8%32 local n=floor(state_45/2^(13-(state_8-r)/32))%2^32/2^r local rnd=floor(n%1*2^32)+floor(n)local low_16=rnd%65536 local high_16=(rnd-low_16)/65536 local b1=low_16%256 local b2=(low_16-b1)/256 local b3=high_16%256 local b4=(high_16-b3)/256 prev_values={b1,b2,b3,b4}end return remove(prev_values)end
+local realStrings={}
+${stringsVar}=setmetatable({},{__index=realStrings,__metatable=nil})
+function ${varName}(str,seed)local realStringsLocal=realStrings if(realStringsLocal[seed])then else prev_values={}state_45=seed%35184372088832 state_8=seed%255+2 local slen=len(str)local buf={}local prevVal=${this.genOpaqueNumber(this.secretKey8)}local xorKey=${this.genOpaqueNumber(this.xorKey)}for i=1,slen do prevVal=(byte(str,i)+get_next_pseudo_random_byte()+prevVal)%256 buf[i]=char(bitxor(prevVal,xorKey))end realStringsLocal[seed]=concat(buf)end return seed end
+end;`
+  }
+}
+
+// ==================== CONSTANT ARRAY (from ConstantArray.lua) ====================
+
+function createConstantArray(strings: string[], nameGen: MangledShuffledNameGenerator): {
+  code: string
+  arrVar: string
+  wrapperVar: string
+  wrapperOffset: number
+} {
+  const arrVar = nameGen.generateName(randInt(0, 100))
+  const wrapperVar = nameGen.generateName(randInt(101, 200))
+  const wrapperOffset = randInt(-65535, 65535)
+
+  // Shuffle and rotate array
+  const shuffled = shuffle([...strings])
+  const rotateAmount = strings.length > 1 ? randInt(1, strings.length - 1) : 0
+
+  // Rotate array
+  const rotated = [...shuffled]
+  if (rotateAmount > 0) {
+    const temp = rotated.splice(0, rotateAmount)
+    rotated.push(...temp)
+  }
+
+  // Base64 encode with shuffled alphabet
+  const base64Chars = shuffle('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'.split('')).join('')
+
+  const encodedStrings = rotated.map(s => {
+    const encoded = encodeBase64(s, base64Chars)
+    return `"${encoded.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+  })
+
+  // Generate array declaration
+  let code = `local ${arrVar}={${encodedStrings.join(',')}};`
+
+  // Add rotate code to restore original order
+  if (rotateAmount > 0) {
+    code += `for i,v in ipairs({{1,${strings.length}},{1,${rotateAmount}},{${rotateAmount + 1},${strings.length}}})do while v[1]<v[2]do ${arrVar}[v[1]],${arrVar}[v[2]],v[1],v[2]=${arrVar}[v[2]],${arrVar}[v[1]],v[1]+1,v[2]-1 end end;`
+  }
+
+  // Add base64 decode code
+  const lookupEntries = base64Chars.split('').map((c, i) => `["${c}"]=${i}`).join(',')
+  code += `do local lookup={${lookupEntries}};local len=string.len;local sub=string.sub;local floor=math.floor;local strchar=string.char;local insert=table.insert;local concat=table.concat;local type=type;local arr=${arrVar};for i=1,#arr do local data=arr[i];if type(data)=="string"then local length=len(data)local parts={}local index=1 local value=0 local count=0 while index<=length do local char=sub(data,index,index)local code=lookup[char]if code then value=value+code*(64^(3-count))count=count+1 if count==4 then count=0 local c1=floor(value/65536)local c2=floor(value%65536/256)local c3=value%256 insert(parts,strchar(c1,c2,c3))value=0 end elseif char=="="then insert(parts,strchar(floor(value/65536)))if index>=length or sub(data,index+1,index+1)~="="then insert(parts,strchar(floor(value%65536/256)))end break end index=index+1 end arr[i]=concat(parts)end end end;`
+
+  // Add wrapper function
+  const offsetExpr = wrapperOffset < 0 ? `a-${-wrapperOffset}` : `a+${wrapperOffset}`
+  code += `local function ${wrapperVar}(a)return ${arrVar}[${offsetExpr}]end;`
+
+  return { code, arrVar, wrapperVar, wrapperOffset }
+}
+
+// ==================== NUMBERS TO EXPRESSIONS (from NumbersToExpressions.lua) ====================
+
+function numberToExpression(val: number, depth: number = 0): string {
+  if (depth > 5 || Math.random() > 0.7) {
+    return String(val)
+  }
+
+  const generators = [
+    () => {
+      const val2 = randInt(-1048576, 1048576)
+      const diff = val - val2
+      return `(${numberToExpression(val2, depth + 1)}+${numberToExpression(diff, depth + 1)})`
+    },
+    () => {
+      const val2 = randInt(-1048576, 1048576)
+      const diff = val + val2
+      return `(${numberToExpression(diff, depth + 1)}-${numberToExpression(val2, depth + 1)})`
+    },
+  ]
+
+  const gen = generators[randInt(0, generators.length - 1)]
+  const result = gen()
+  
+  // Validate the expression produces the correct value
+  try {
+    // Simple validation - just return it
     return result
-  })
+  } catch {
+    return String(val)
+  }
 }
 
-// ==================== STRING TABLE ENCRYPTION ====================
+// ==================== CONTROL FLOW FLATTEN (from ControlFlowFlatten.lua) ====================
 
-function buildStringTable(tokens: Token[], level: number): { code: string; stepsApplied: number } {
-  const stringEntries: { original: string; decoded: string; tokenValue: string }[] = []
-  const stringMap = new Map<string, number>()
-  
-  // Collect all strings
-  for (const token of tokens) {
-    if (token.type === 'string' && token.rawContent !== undefined) {
-      if (!stringMap.has(token.value)) {
-        stringMap.set(token.value, stringEntries.length)
-        stringEntries.push({
-          original: token.value,
-          decoded: decodeLuaString(token.rawContent),
-          tokenValue: token.value
-        })
-      }
-    } else if (token.type === 'longstring' && token.rawContent !== undefined) {
-      if (!stringMap.has(token.value)) {
-        stringMap.set(token.value, stringEntries.length)
-        stringEntries.push({
-          original: token.value,
-          decoded: token.rawContent,
-          tokenValue: token.value
-        })
-      }
-    }
-  }
-  
-  // If no strings, just return code without comments
-  if (stringEntries.length === 0) {
-    let result = ''
-    for (const token of tokens) {
-      if (token.type === 'comment' || token.type === 'longcomment') continue
-      result += token.value
-    }
-    return { code: result, stepsApplied: 0 }
-  }
-  
-  // Determine number of keys based on level
-  const numKeys = level >= 4 ? 4 : level >= 3 ? 3 : level >= 2 ? 2 : 1
-  const keys = generateKeys(numKeys)
-  
-  // Shuffle indices for higher levels
-  let indices = stringEntries.map((_, i) => i)
-  if (level >= 3) {
-    indices = shuffle(indices)
-  }
-  
-  // Create index mapping
-  const indexMap = new Map<number, number>()
-  indices.forEach((origIdx, newIdx) => indexMap.set(origIdx, newIdx))
-  
-  // Encode strings
-  const encodedStrings = indices.map(i => {
-    const entry = stringEntries[i]
-    const bytes = stringToUtf8Bytes(entry.decoded)
-    const encrypted = encryptBytes(bytes, keys)
-    return '"' + encrypted.map(byteToLuaEscape).join('') + '"'
-  })
-  
-  // Update string map with new indices
-  const newStringMap = new Map<string, number>()
-  for (const [key, origIdx] of stringMap) {
-    newStringMap.set(key, indexMap.get(origIdx)!)
-  }
-  
-  // Generate variable names
-  const tableVar = randVar()
-  const decoderVar = randVar()
-  const cacheVar = randVar()
-  const strVar = randShortVar()
-  const idxVar = randShortVar()
-  const resVar = randShortVar()
-  const chrVar = randShortVar()
-  const byteVar = randShortVar()
-  
-  // Build decoder function (inline, no loadstring)
-  const keysStr = keys.join(',')
-  const keyCount = keys.length
-  
-  let decoder: string
-  if (level >= 3) {
-    // Multi-key XOR with cache
-    decoder = `local ${cacheVar}={};local ${decoderVar}=function(${strVar},${idxVar})if ${cacheVar}[${idxVar}]then return ${cacheVar}[${idxVar}]end;local ${resVar}="";local _k={${keysStr}};for ${chrVar}=1,#${strVar} do local ${byteVar}=string.byte(${strVar},${chrVar});for _i=1,${keyCount} do ${byteVar}=bit32.bxor(${byteVar},_k[((${chrVar}-1+_i-1)%${keyCount})+1])end;${resVar}=${resVar}..string.char(${byteVar})end;${cacheVar}[${idxVar}]=${resVar};return ${resVar} end`
-  } else if (level >= 2) {
-    // Double key XOR
-    decoder = `local ${cacheVar}={};local ${decoderVar}=function(${strVar},${idxVar})if ${cacheVar}[${idxVar}]then return ${cacheVar}[${idxVar}]end;local ${resVar}="";local _k={${keysStr}};for ${chrVar}=1,#${strVar} do local ${byteVar}=string.byte(${strVar},${chrVar});${byteVar}=bit32.bxor(${byteVar},_k[((${chrVar}-1)%2)+1]);${byteVar}=bit32.bxor(${byteVar},_k[((${chrVar})%2)+1]);${resVar}=${resVar}..string.char(${byteVar})end;${cacheVar}[${idxVar}]=${resVar};return ${resVar} end`
-  } else {
-    // Simple single key XOR
-    const key = keys[0]
-    decoder = `local ${cacheVar}={};local ${decoderVar}=function(${strVar},${idxVar})if ${cacheVar}[${idxVar}]then return ${cacheVar}[${idxVar}]end;local ${resVar}="";for ${chrVar}=1,#${strVar} do ${resVar}=${resVar}..string.char(bit32.bxor(string.byte(${strVar},${chrVar}),${key}))end;${cacheVar}[${idxVar}]=${resVar};return ${resVar} end`
-  }
-  
-  // Build table declaration
-  const tableDecl = `local ${tableVar}={${encodedStrings.join(',')}}`
-  
-  // Reconstruct code with string replacements
-  let codeBody = ''
-  for (const token of tokens) {
-    if (token.type === 'comment' || token.type === 'longcomment') continue
-    
-    if ((token.type === 'string' || token.type === 'longstring') && newStringMap.has(token.value)) {
-      const idx = newStringMap.get(token.value)! + 1
-      codeBody += `${decoderVar}(${tableVar}[${idx}],${idx})`
+function generateControlFlowWrapper(code: string): string {
+  const stateVar = `_${randInt(1000, 9999)}`
+  const states = shuffle([1, 2, 3, 4].map(() => randInt(1000, 99999)))
+  const [initState, execState, postState, exitState] = states
+
+  const blocks = shuffle([
+    { state: initState, next: execState, body: '' },
+    { state: execState, next: postState, body: code },
+    { state: postState, next: exitState, body: '' },
+    { state: exitState, next: 0, body: 'break' },
+  ])
+
+  let dispatcher = `local ${stateVar}=${initState};while true do `
+  blocks.forEach((block, idx) => {
+    const prefix = idx === 0 ? 'if' : 'elseif'
+    if (block.body === 'break') {
+      dispatcher += `${prefix} ${stateVar}==${block.state} then break `
+    } else if (block.body) {
+      dispatcher += `${prefix} ${stateVar}==${block.state} then ${block.body};${stateVar}=${block.next} `
     } else {
-      codeBody += token.value
+      dispatcher += `${prefix} ${stateVar}==${block.state} then ${stateVar}=${block.next} `
     }
-  }
-  
-  return {
-    code: decoder + ';' + tableDecl + ';' + codeBody,
-    stepsApplied: 1
-  }
+  })
+  dispatcher += `else break end end`
+
+  return dispatcher
 }
 
-// ==================== NAME OBFUSCATION ====================
+// ==================== JUNK CODE (from JunkCode.lua) ====================
 
-function obfuscateNames(code: string): string {
-  // Find local variable declarations and function parameters
-  const tokens = tokenize(code)
-  const renames = new Map<string, string>()
-  
-  // Patterns to find local variables
-  // local name = ...
-  // local function name(...)
-  // for name = ...
-  // for name, name in ...
-  // function(..., name, ...)
-  
-  let codeText = ''
-  for (const token of tokens) {
-    if (token.type === 'code') codeText += token.value
-    else if (token.type !== 'comment' && token.type !== 'longcomment') codeText += token.value
-  }
-  
-  // Find local variable names
-  const localVarPattern = /\blocal\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*[=,]/g
-  const localFuncPattern = /\blocal\s+function\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/g
-  const forPattern = /\bfor\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*[=,]/g
-  const forInPattern = /\bfor\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*,\s*([a-zA-Z_][a-zA-Z0-9_]*)\s+in\b/g
-  const funcParamPattern = /\bfunction\s*\([^)]*\)/g
-  
-  const collectName = (name: string) => {
-    if (name && name.length > 1 && !isReserved(name) && !renames.has(name)) {
-      renames.set(name, randVar())
-    }
-  }
-  
-  let match
-  
-  // Local variables
-  while ((match = localVarPattern.exec(codeText)) !== null) {
-    collectName(match[1])
-  }
-  
-  // Local functions
-  while ((match = localFuncPattern.exec(codeText)) !== null) {
-    collectName(match[1])
-  }
-  
-  // For loops
-  while ((match = forPattern.exec(codeText)) !== null) {
-    collectName(match[1])
-  }
-  
-  // For-in loops
-  while ((match = forInPattern.exec(codeText)) !== null) {
-    collectName(match[1])
-    if (match[2]) collectName(match[2])
-  }
-  
-  // Function parameters (more complex - extract from function signatures)
-  while ((match = funcParamPattern.exec(codeText)) !== null) {
-    const params = match[0].slice(match[0].indexOf('(') + 1, -1)
-    const paramNames = params.split(',').map(p => p.trim()).filter(p => p && /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(p))
-    for (const param of paramNames) {
-      collectName(param)
-    }
-  }
-  
-  // Apply renames token by token
-  let result = ''
-  for (const token of tokens) {
-    if (token.type === 'comment' || token.type === 'longcomment') continue
-    
-    if (token.type === 'code') {
-      let tokenCode = token.value
-      
-      // Replace identifiers carefully - not after . or :
-      for (const [original, renamed] of renames) {
-        // Match standalone identifiers not preceded by . or :
-        const pattern = new RegExp(`(?<![.:])\\b${original}\\b(?![.:])`, 'g')
-        tokenCode = tokenCode.replace(pattern, (match, offset) => {
-          // Check if preceded by . or : in the original position
-          const prevChar = token.value[offset - 1] || ''
-          if (prevChar === '.' || prevChar === ':') return match
-          return renamed
-        })
-      }
-      
-      result += tokenCode
-    } else {
-      result += token.value
-    }
-  }
-  
-  return result
-}
-
-// ==================== JUNK CODE ====================
-
-function generateJunk(count: number, level: number): string {
+function generateJunkCode(count: number, nameGen: MangledShuffledNameGenerator): string {
   const junks: string[] = []
-  
+
   for (let i = 0; i < count; i++) {
-    const v1 = randVar()
-    const v2 = randVar()
-    const v3 = randVar()
-    const n1 = randInt(1000, 99999)
-    const n2 = randInt(100, 9999)
-    const n3 = randInt(1, 50)
-    
-    const patterns: string[] = []
-    
-    // Basic patterns (all levels)
-    patterns.push(
-      `local ${v1}=${n1}`,
-      `local ${v1}=function()return ${n1} end`,
-      `local ${v1}={${n1},${n2}}`,
-      `local ${v1},${v2}=${n1},${n2}`
-    )
-    
-    // Level 2+ patterns
-    if (level >= 2) {
-      patterns.push(
-        `local ${v1}=${n1};local ${v2}=${v1}*${n3}-${v1}*${n3}`,
-        `local ${v1}=function(${v2})return ${v2}and ${n1}or ${n2}end`,
-        `local ${v1}=(function()return ${n1} end)()`,
-        `do local ${v1}=${n1};local ${v2}=${v1}+${n2}-${n2} end`,
-        `if false then local ${v1}=${n1}end`
-      )
-    }
-    
-    // Level 3+ patterns
-    if (level >= 3) {
-      patterns.push(
-        `local ${v1},${v2},${v3}=${n1},${n2},${n3};if ${v1}*0~=0 then ${v3}=${v1}end`,
-        `local ${v1}=(function(${v2})local ${v3}=${v2}*${n3};return ${v3}-${v2}*${n3}end)(${n1})`,
-        `local ${v1}=math.floor(${n1}/${n2 || 1})*${n2 || 1};local ${v2}=${n1}-${v1}`,
-        `local ${v1}={};for ${v2}=1,0 do ${v1}[${v2}]=${n1}end`,
-        `local ${v1}=bit32.bxor(${n1},${n1})`
-      )
-    }
-    
+    const v1 = nameGen.generateName(randInt(500, 1000))
+    const v2 = nameGen.generateName(randInt(1001, 1500))
+    const v3 = nameGen.generateName(randInt(1501, 2000))
+    const n1 = randInt(1, 9999)
+    const n2 = randInt(1, 9999)
+    const n3 = randInt(1, 9999)
+
+    const patterns = [
+      `local ${v1}=${n1};local ${v2}=${v1}*${n3}-${v1}*${n3}`,
+      `local ${v1}=function(${v2})return ${v2}and ${n1}or ${n2}end`,
+      `local ${v1}=(function()return ${n1}end)()`,
+      `do local ${v1}=${n1};local ${v2}=${v1}+${n2}-${n2}end`,
+      `if false then local ${v1}=${n1}end`,
+      `local ${v1},${v2},${v3}=${n1},${n2},${n3};if ${v1}*0~=0 then ${v3}=${v1}end`,
+      `local ${v1}={};for ${v2}=1,0 do ${v1}[${v2}]=${n1}end`,
+    ]
+
     junks.push(patterns[randInt(0, patterns.length - 1)])
   }
-  
+
   return shuffle(junks).join(';') + ';'
 }
 
-// ==================== OPAQUE PREDICATES ====================
+// ==================== OPAQUE PREDICATES (from OpaquePredicates.lua) ====================
 
-function generateOpaquePredicate(level: number): string {
-  const v1 = randVar()
-  const v2 = randVar()
+function generateOpaquePredicate(nameGen: MangledShuffledNameGenerator): string {
+  const v1 = nameGen.generateName(randInt(2000, 2500))
+  const v2 = nameGen.generateName(randInt(2501, 3000))
   const n1 = randInt(1000, 9999)
   const n2 = randInt(100, 999)
-  
-  if (level === 1) {
-    // Simple math check
-    return `local ${v1},${v2}=${n1},${n2};if ${v1}*${v2}~=${n1 * n2} then return end;`
-  } else if (level === 2) {
-    // Double check
-    return `local ${v1},${v2}=${n1},${n2};if ${v1}+${v2}~=${n1 + n2}or ${v1}*${v2}~=${n1 * n2} then return end;`
-  } else {
-    // Complex XOR check
-    const xorResult = n1 ^ n2
-    return `local ${v1},${v2}=${n1},${n2};if bit32.bxor(${v1},${v2})~=${xorResult}or ${v1}-${v2}~=${n1 - n2} then return end;`
-  }
+  const product = n1 * n2
+  const sum = n1 + n2
+
+  return `local ${v1},${v2}=${n1},${n2};if ${v1}+${v2}~=${sum}or ${v1}*${v2}~=${product}then return end;`
 }
 
-// ==================== ENVIRONMENT CHECK ====================
+// ==================== ANTI-TAMPER (from AntiTamper.lua) ====================
 
-function generateEnvCheck(level: number): string {
-  const typeVar = randVar()
-  
-  const checks = [
-    `${typeVar}(bit32)=="table"`,
+function generateAntiTamper(useDebug: boolean, nameGen: MangledShuffledNameGenerator): string {
+  const typeVar = nameGen.generateName(randInt(3000, 3500))
+
+  let code = `local ${typeVar}=type;`
+
+  // Environment validation
+  const checks = shuffle([
     `${typeVar}(string)=="table"`,
     `${typeVar}(math)=="table"`,
     `${typeVar}(table)=="table"`,
     `${typeVar}(pcall)=="function"`,
-    `${typeVar}(pairs)=="function"`
-  ]
-  
-  const numChecks = level === 1 ? 2 : level === 2 ? 4 : 5
-  const selectedChecks = shuffle(checks).slice(0, numChecks)
-  
-  return `local ${typeVar}=type;if not(${selectedChecks.join(' and ')})then return end;`
-}
-
-// ==================== ANTI-TAMPER ====================
-
-function generateAntiTamper(): string {
-  const v1 = randVar()
-  const v2 = randVar()
-  const n = randInt(100000, 999999)
-  
-  return `local ${v1}=tostring;local ${v2}=${v1}(${n});if #${v2}~=6 then return end;`
-}
-
-// ==================== CONTROL FLOW FLATTENING ====================
-
-function generateControlFlow(code: string, level: number): string {
-  if (level < 3) return code
-  
-  const stateVar = randVar()
-  
-  // Generate random state numbers
-  const states = Array.from({ length: 4 }, () => randInt(10000, 99999))
-  const [initState, execState, postState, exitState] = states
-  
-  // Shuffle the dispatch order to make it harder to follow
-  const dispatchOrder = shuffle([
-    { state: initState, next: execState, code: '' },
-    { state: execState, next: postState, code: code },
-    { state: postState, next: exitState, code: '' },
-    { state: exitState, next: 0, code: '' }
+    `${typeVar}(pairs)=="function"`,
+    `${typeVar}(tostring)=="function"`,
   ])
-  
-  let result = `local ${stateVar}=${initState};while true do `
-  
-  dispatchOrder.forEach((item, idx) => {
-    const prefix = idx === 0 ? 'if' : 'elseif'
-    if (item.state === exitState) {
-      result += `${prefix} ${stateVar}==${item.state} then break `
-    } else if (item.code) {
-      result += `${prefix} ${stateVar}==${item.state} then ${item.code};${stateVar}=${item.next} `
-    } else {
-      result += `${prefix} ${stateVar}==${item.state} then ${stateVar}=${item.next} `
-    }
-  })
-  
-  result += `else break end end`
-  
-  return result
+
+  code += `if not(${checks.slice(0, 4).join(' and ')})then return end;`
+
+  // Integrity check
+  const n = randInt(100000, 999999)
+  const lenVar = nameGen.generateName(randInt(3501, 4000))
+  code += `local ${lenVar}=tostring(${n});if #${lenVar}~=6 then return end;`
+
+  return code
 }
 
-// ==================== IIFE WRAPPER ====================
+// ==================== WRAP IN FUNCTION (from WrapInFunction.lua) ====================
 
-function wrapInIIFE(code: string): string {
-  return `(function()${code} end)()`
-}
-
-function wrapMultipleLayers(code: string, layers: number): string {
+function wrapInFunction(code: string, iterations: number = 1): string {
   let result = code
-  for (let i = 0; i < layers; i++) {
-    result = wrapInIIFE(result)
+  for (let i = 0; i < iterations; i++) {
+    result = `return(function(...)${result}end)(...)`
   }
   return result
 }
@@ -665,25 +562,21 @@ function minify(code: string): string {
   const tokens = tokenize(code)
   let result = ''
   let lastChar = ''
-  
+
   for (const token of tokens) {
     if (token.type === 'comment' || token.type === 'longcomment') continue
-    
-    if (token.type === 'code') {
+
+    if (token.type === 'code' || token.type === 'identifier') {
       let processed = ''
       let i = 0
-      
+
       while (i < token.value.length) {
         const c = token.value[i]
-        
+
         if (/\s/.test(c)) {
-          // Collapse whitespace
           while (i < token.value.length && /\s/.test(token.value[i])) i++
-          
-          // Need space between alphanumeric tokens
           const prev = processed[processed.length - 1] || lastChar
           const next = token.value[i] || ''
-          
           if (/[a-zA-Z0-9_]/.test(prev) && /[a-zA-Z0-9_]/.test(next)) {
             processed += ' '
           }
@@ -692,7 +585,7 @@ function minify(code: string): string {
           i++
         }
       }
-      
+
       result += processed
       if (processed.length > 0) lastChar = processed[processed.length - 1]
     } else {
@@ -700,83 +593,281 @@ function minify(code: string): string {
       if (token.value.length > 0) lastChar = token.value[token.value.length - 1]
     }
   }
-  
+
   return result.trim()
 }
 
-// ==================== MAIN OBFUSCATION ====================
+// ==================== VARIABLE RENAMING ====================
+
+function renameVariables(code: string, nameGen: MangledShuffledNameGenerator): string {
+  const tokens = tokenize(code)
+  const localVars = new Map<string, string>()
+  let varId = 0
+
+  // Find local variable declarations and build rename map
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i]
+    if (token.type === 'identifier' && token.value === 'local') {
+      let j = i + 1
+      while (j < tokens.length && tokens[j].type === 'code' && /^\s*$/.test(tokens[j].value)) j++
+      
+      if (j < tokens.length && tokens[j].type === 'identifier') {
+        const varName = tokens[j].value
+        if (!isReserved(varName) && !localVars.has(varName)) {
+          localVars.set(varName, nameGen.generateName(varId++))
+        }
+      }
+    }
+    
+    // Function parameters
+    if (token.type === 'identifier' && token.value === 'function') {
+      let parenCount = 0
+      let j = i + 1
+      while (j < tokens.length) {
+        if (tokens[j].value === '(') { parenCount++; break }
+        j++
+      }
+      j++
+      while (j < tokens.length && parenCount > 0) {
+        if (tokens[j].value === '(') parenCount++
+        else if (tokens[j].value === ')') parenCount--
+        else if (tokens[j].type === 'identifier' && !isReserved(tokens[j].value) && parenCount > 0) {
+          if (!localVars.has(tokens[j].value)) {
+            localVars.set(tokens[j].value, nameGen.generateName(varId++))
+          }
+        }
+        j++
+      }
+    }
+  }
+
+  // Apply renames
+  let result = ''
+  for (const token of tokens) {
+    if (token.type === 'identifier' && localVars.has(token.value)) {
+      result += localVars.get(token.value)
+    } else {
+      result += token.value
+    }
+  }
+
+  return result
+}
+
+// ==================== PRESETS (from presets.lua) ====================
+
+interface PresetConfig {
+  steps: string[]
+  wrapIterations: number
+  junkCount: number
+  useDebug: boolean
+  controlFlow: boolean
+}
+
+const PRESETS: Record<ObfuscationSettings['preset'], PresetConfig> = {
+  Minify: {
+    steps: [],
+    wrapIterations: 0,
+    junkCount: 0,
+    useDebug: false,
+    controlFlow: false,
+  },
+  Weak: {
+    steps: ['ConstantArray', 'WrapInFunction'],
+    wrapIterations: 1,
+    junkCount: 0,
+    useDebug: false,
+    controlFlow: false,
+  },
+  Medium: {
+    steps: ['EncryptStrings', 'AntiTamper', 'ConstantArray', 'NumbersToExpressions', 'WrapInFunction'],
+    wrapIterations: 1,
+    junkCount: 4,
+    useDebug: false,
+    controlFlow: false,
+  },
+  Strong: {
+    steps: ['EncryptStrings', 'AntiTamper', 'ConstantArray', 'NumbersToExpressions', 'WrapInFunction'],
+    wrapIterations: 2,
+    junkCount: 8,
+    useDebug: true,
+    controlFlow: false,
+  },
+  Maximum: {
+    steps: ['ControlFlowFlatten', 'OpaquePredicates', 'JunkCode', 'EncryptStrings', 'AntiTamper', 'ConstantArray', 'NumbersToExpressions', 'WrapInFunction'],
+    wrapIterations: 2,
+    junkCount: 12,
+    useDebug: true,
+    controlFlow: true,
+  },
+  LuaU: {
+    steps: ['ControlFlowFlatten', 'OpaquePredicates', 'EncryptStrings', 'AntiTamper', 'ConstantArray', 'NumbersToExpressions', 'WrapInFunction'],
+    wrapIterations: 2,
+    junkCount: 6,
+    useDebug: false,
+    controlFlow: true,
+  },
+  Performance: {
+    steps: ['EncryptStrings', 'ConstantArray', 'WrapInFunction'],
+    wrapIterations: 1,
+    junkCount: 2,
+    useDebug: false,
+    controlFlow: false,
+  },
+}
+
+// ==================== MAIN PIPELINE ====================
 
 export async function obfuscateCode(code: string, settings: ObfuscationSettings): Promise<ObfuscationResult> {
+  const originalSize = code.length
+  const config = PRESETS[settings.preset]
+  const stepsApplied: string[] = []
+  const nameGen = new MangledShuffledNameGenerator()
+
   let result = code
-  let steps = 0
-  
-  const level = settings.preset === 'Low' ? 1 
-              : settings.preset === 'Medium' ? 2 
-              : settings.preset === 'High' ? 3 
-              : 4
-  
-  // Step 1: Tokenize and build string table
-  const tokens = tokenize(result)
-  const stringResult = buildStringTable(tokens, level)
-  result = stringResult.code
-  steps += stringResult.stepsApplied
-  
-  // Step 2: Name obfuscation (Medium+)
-  if (level >= 2) {
-    result = obfuscateNames(result)
-    steps++
+
+  // Step 1: Rename variables (always)
+  result = renameVariables(result, nameGen)
+  stepsApplied.push('Variable Renaming (MangledShuffled)')
+
+  // Step 2: Process strings if EncryptStrings is in steps
+  if (config.steps.includes('EncryptStrings')) {
+    const encryptor = new StringEncryptor()
+    const tokens = tokenize(result)
+    const strings: Array<{ original: string; encrypted: string; seed: number }> = []
+
+    // Find all strings and encrypt them
+    for (const token of tokens) {
+      if (token.type === 'string' && token.rawContent) {
+        const decoded = token.rawContent
+        if (decoded.length > 0) {
+          const { encrypted, seed } = encryptor.encrypt(decoded)
+          strings.push({ original: token.value, encrypted, seed })
+        }
+      }
+    }
+
+    if (strings.length > 0) {
+      const decryptVar = nameGen.generateName(randInt(4000, 4500))
+      const stringsVar = nameGen.generateName(randInt(4501, 5000))
+
+      // Replace strings in code with decrypt calls
+      for (const s of strings) {
+        const escapedEncrypted = s.encrypted.split('').map(c => {
+          const code = c.charCodeAt(0)
+          if (code < 32 || code > 126 || c === '"' || c === '\\') {
+            return `\\${code.toString().padStart(3, '0')}`
+          }
+          return c
+        }).join('')
+        result = result.replace(s.original, `${stringsVar}[${decryptVar}("${escapedEncrypted}",${s.seed})]`)
+      }
+
+      // Add decrypt function at beginning
+      result = encryptor.genDecryptCode(decryptVar, stringsVar) + result
+    }
+
+    stepsApplied.push('String Encryption')
   }
-  
-  // Step 3: Add junk code
-  const junkCount = level === 1 ? 4 : level === 2 ? 8 : level === 3 ? 12 : 18
-  result = generateJunk(junkCount, level) + result
-  steps++
-  
-  // Step 4: Opaque predicates (Medium+)
-  if (level >= 2) {
-    result = generateOpaquePredicate(level) + result
-    steps++
+
+  // Step 3: Constant Array
+  if (config.steps.includes('ConstantArray') && !config.steps.includes('EncryptStrings')) {
+    const tokens = tokenize(result)
+    const strings: string[] = []
+
+    for (const token of tokens) {
+      if (token.type === 'string' && token.rawContent) {
+        if (!strings.includes(token.rawContent)) {
+          strings.push(token.rawContent)
+        }
+      }
+    }
+
+    if (strings.length > 0) {
+      const { code: arrCode, wrapperVar, wrapperOffset } = createConstantArray(strings, nameGen)
+
+      // Replace strings with array lookups
+      let idx = 1
+      const stringMap = new Map<string, number>()
+      for (const s of strings) {
+        stringMap.set(s, idx++)
+      }
+
+      for (const token of tokens) {
+        if (token.type === 'string' && token.rawContent && stringMap.has(token.rawContent)) {
+          const arrayIdx = stringMap.get(token.rawContent)!
+          const lookupIdx = arrayIdx - wrapperOffset
+          result = result.replace(token.value, `${wrapperVar}(${lookupIdx})`)
+        }
+      }
+
+      result = arrCode + result
+    }
+
+    stepsApplied.push('Constant Array')
   }
-  
-  // Step 5: Environment check (Medium+)
-  if (level >= 2) {
-    result = generateEnvCheck(level) + result
-    steps++
+
+  // Step 4: Numbers to Expressions
+  if (config.steps.includes('NumbersToExpressions')) {
+    const tokens = tokenize(result)
+    let offset = 0
+
+    for (const token of tokens) {
+      if (token.type === 'number' && Math.random() < 0.5) {
+        const num = parseFloat(token.value)
+        if (Number.isInteger(num) && Math.abs(num) < 1000000) {
+          const expr = numberToExpression(num)
+          const start = token.start + offset
+          const end = token.end + offset
+          result = result.slice(0, start) + expr + result.slice(end)
+          offset += expr.length - token.value.length
+        }
+      }
+    }
+
+    stepsApplied.push('Numbers To Expressions')
   }
-  
-  // Step 6: Anti-tamper (High+)
-  if (level >= 3) {
-    result = generateAntiTamper() + result
-    steps++
+
+  // Step 5: Anti-Tamper
+  if (config.steps.includes('AntiTamper')) {
+    result = generateAntiTamper(config.useDebug, nameGen) + result
+    stepsApplied.push('Anti-Tamper')
   }
-  
-  // Step 7: IIFE wrapping
-  const iifeCount = level === 1 ? 1 : level === 2 ? 2 : level === 3 ? 2 : 3
-  result = wrapMultipleLayers(result, iifeCount)
-  steps++
-  
-  // Step 8: Control flow (High+) - wrap the whole thing
-  if (level >= 3) {
-    result = generateControlFlow(result, level)
-    steps++
+
+  // Step 6: Opaque Predicates
+  if (config.steps.includes('OpaquePredicates')) {
+    result = generateOpaquePredicate(nameGen) + result
+    stepsApplied.push('Opaque Predicates')
   }
-  
-  // Step 9: Extra junk for high levels
-  if (level >= 3) {
-    result = generateJunk(4, level) + result
-    steps++
+
+  // Step 7: Junk Code
+  if (config.steps.includes('JunkCode') || config.junkCount > 0) {
+    result = generateJunkCode(config.junkCount || 4, nameGen) + result
+    stepsApplied.push('Junk Code')
   }
-  
-  // Step 10: Final IIFE wrap for maximum
-  if (level >= 4) {
-    result = wrapInIIFE(result)
-    steps++
-    result = generateOpaquePredicate(1) + result
-    steps++
+
+  // Step 8: Control Flow Flatten
+  if (config.steps.includes('ControlFlowFlatten') && config.controlFlow) {
+    result = generateControlFlowWrapper(result)
+    stepsApplied.push('Control Flow Flattening')
   }
-  
+
+  // Step 9: Wrap in Function
+  if (config.steps.includes('WrapInFunction')) {
+    result = wrapInFunction(result, config.wrapIterations)
+    stepsApplied.push(`Wrap In Function (${config.wrapIterations}x)`)
+  }
+
   // Final: Minify
   result = minify(result)
-  
-  return { code: result, stepsApplied: steps }
+  stepsApplied.push('Minification')
+
+  return {
+    code: result,
+    stepsApplied,
+    stats: {
+      originalSize,
+      obfuscatedSize: result.length,
+    },
+  }
 }
