@@ -5,7 +5,8 @@ import dynamic from 'next/dynamic'
 import Header from '@/components/Header'
 import Footer from '@/components/Footer'
 import StatsPanel from '@/components/StatsPanel'
-import { obfuscateCode } from '@/lib/obfuscator'
+import AdvancedOptions from '@/components/AdvancedOptions'
+import { obfuscateCode, defaultOptions, type ObfuscationOptions, type ProtectionStats } from '@/lib/obfuscator'
 
 const CodeEditor = dynamic(() => import('@/components/CodeEditor'), { 
   ssr: false,
@@ -29,12 +30,21 @@ end
 
 greet(Player.Name)`
 
+interface Stats {
+  originalSize: number
+  obfuscatedSize: number
+  processingTime: number
+  protections?: ProtectionStats
+}
+
 export default function Home() {
   const [input, setInput] = useState(defaultCode)
   const [output, setOutput] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [stats, setStats] = useState<{ originalSize: number; obfuscatedSize: number; processingTime: number } | null>(null)
+  const [stats, setStats] = useState<Stats | null>(null)
+  const [options, setOptions] = useState<ObfuscationOptions>(defaultOptions)
+  const [copied, setCopied] = useState(false)
 
   const handleObfuscate = useCallback(async () => {
     if (!input.trim()) {
@@ -43,14 +53,16 @@ export default function Home() {
     }
     setLoading(true)
     setError(null)
+    setCopied(false)
     const start = performance.now()
     try {
-      const result = await obfuscateCode(input)
+      const result = await obfuscateCode(input, options)
       setOutput(result.code)
       setStats({
         originalSize: result.stats.originalSize,
         obfuscatedSize: result.stats.obfuscatedSize,
         processingTime: Math.round(performance.now() - start),
+        protections: result.stats.protections,
       })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'An error occurred during obfuscation')
@@ -58,10 +70,12 @@ export default function Home() {
     } finally {
       setLoading(false)
     }
-  }, [input])
+  }, [input, options])
 
   const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(output)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }, [output])
 
   const handleDownload = useCallback(() => {
@@ -85,9 +99,9 @@ export default function Home() {
         <div className="absolute inset-0 bg-radial pointer-events-none"></div>
         <div className="container mx-auto px-4 pt-16 pb-8 max-w-5xl relative">
           <div className="text-center mb-10">
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#151519] border border-[#1f1f28] text-sm text-zinc-400 mb-6">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#151519] border border-[#1f1f28] text-sm text-zinc-400 mb-6 glow-animate">
               <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-              2026 Edition • Open Source
+              v3.0 Ultimate • 2026 Edition
             </div>
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-4">
               <span className="gradient-text">Prometheus</span>
@@ -95,14 +109,18 @@ export default function Home() {
               <span className="text-white">Obfuscator</span>
             </h1>
             <p className="text-lg text-zinc-400 max-w-2xl mx-auto leading-relaxed mb-6">
-              The most advanced open-source Lua obfuscator by Levno_710.
+              The most advanced open-source Lua obfuscator with
+              <span className="text-[#6366f1]"> MBA</span>,
+              <span className="text-[#a855f7]"> CFG</span>, and
+              <span className="text-[#22c55e]"> Multi-Layer Encryption</span>.
               <br />
               Optimized for all 2026 Roblox executors.
             </p>
             <div className="flex flex-wrap justify-center gap-3 text-sm">
-              <span className="px-3 py-1 rounded-full bg-green-500/10 text-green-400 border border-green-500/20">✓ Maximum Protection</span>
-              <span className="px-3 py-1 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">✓ 100% Compatible</span>
-              <span className="px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">✓ Client-Side Only</span>
+              <span className="px-3 py-1 rounded-full bg-green-500/10 text-green-400 border border-green-500/20">✓ MBA Obfuscation</span>
+              <span className="px-3 py-1 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">✓ 4-Layer Encryption</span>
+              <span className="px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">✓ Control Flow Flatten</span>
+              <span className="px-3 py-1 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20">✓ Anti-Tamper</span>
             </div>
           </div>
         </div>
@@ -111,6 +129,9 @@ export default function Home() {
       {/* Main Editor Section */}
       <main className="container mx-auto px-4 pb-16 max-w-5xl">
         <div className="space-y-4">
+          {/* Advanced Options */}
+          <AdvancedOptions options={options} onChange={setOptions} />
+
           {/* Input Editor */}
           <div className="editor-wrapper">
             <div className="flex items-center justify-between px-5 py-4 border-b border-[#1f1f28]">
@@ -137,7 +158,7 @@ export default function Home() {
             <button
               onClick={handleObfuscate}
               disabled={loading}
-              className="btn-primary flex items-center gap-3 px-12 py-4 text-lg font-semibold"
+              className="btn-primary flex items-center gap-3 px-12 py-4 text-lg font-semibold group"
             >
               {loading ? (
                 <>
@@ -146,7 +167,7 @@ export default function Home() {
                 </>
               ) : (
                 <>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                   </svg>
                   <span>Obfuscate</span>
@@ -183,10 +204,21 @@ export default function Home() {
                   </div>
                   <div className="flex gap-2">
                     <button onClick={handleCopy} className="btn-secondary text-xs py-2 px-4 flex items-center gap-2">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                      </svg>
-                      Copy
+                      {copied ? (
+                        <>
+                          <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          Copied!
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                          Copy
+                        </>
+                      )}
                     </button>
                     <button onClick={handleDownload} className="btn-secondary text-xs py-2 px-4 flex items-center gap-2">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -212,47 +244,47 @@ export default function Home() {
       <section id="features" className="py-20 border-t border-[#1f1f28]">
         <div className="container mx-auto px-4 max-w-5xl">
           <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold mb-4">Protection Features</h2>
+            <h2 className="text-3xl font-bold mb-4">Advanced Protection Features</h2>
             <p className="text-zinc-400 max-w-2xl mx-auto">
-              All protections applied automatically for maximum security and compatibility.
+              State-of-the-art obfuscation techniques for 2026 and beyond.
             </p>
           </div>
           
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[
               {
-                icon: '🔐',
-                title: 'XOR String Encryption',
-                desc: 'All strings are encrypted with pseudo-random XOR cipher and decrypted at runtime.'
+                icon: '⚡',
+                title: 'MBA Obfuscation',
+                desc: 'Mixed Boolean-Arithmetic transformations that convert simple operations into complex bit operations.'
               },
               {
                 icon: '🔀',
-                title: 'Control Flow Obfuscation',
-                desc: 'State-machine dispatcher pattern makes code flow analysis nearly impossible.'
+                title: 'Control Flow Flattening',
+                desc: 'State-machine dispatcher pattern with closures and encoded state transitions.'
               },
               {
-                icon: '📦',
-                title: 'Constant Array',
-                desc: 'All constants extracted to shuffled array with Base64 encoding.'
+                icon: '🔐',
+                title: '4-Layer String Encryption',
+                desc: 'XOR + rotation + permutation + chunking with multiple decryptor variants.'
+              },
+              {
+                icon: '🧮',
+                title: 'Opaque Predicates',
+                desc: 'Number theory-based always-true/false conditions using Fermat and modular arithmetic.'
+              },
+              {
+                icon: '👁️',
+                title: 'Reference Hiding',
+                desc: 'Localize and obfuscate all global references through indirect access patterns.'
               },
               {
                 icon: '🛡️',
                 title: 'Anti-Tamper',
-                desc: 'Runtime integrity checks detect and prevent code modification.'
-              },
-              {
-                icon: '⚡',
-                title: 'Variable Mangling',
-                desc: 'All local variables renamed with shuffled character patterns.'
-              },
-              {
-                icon: '🚀',
-                title: 'IIFE Wrapping',
-                desc: 'Double IIFE wrapper ensures executor compatibility.'
+                desc: 'Runtime integrity checks with silent corruption mode to waste attacker time.'
               },
             ].map((feature, i) => (
               <div key={i} className="card-glow p-6">
-                <div className="feature-icon">{feature.icon}</div>
+                <div className="feature-icon float">{feature.icon}</div>
                 <h3 className="font-semibold text-lg mb-2">{feature.title}</h3>
                 <p className="text-sm text-zinc-400 leading-relaxed">{feature.desc}</p>
               </div>
@@ -275,10 +307,10 @@ export default function Home() {
             <div className="card p-6">
               <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
                 <span className="text-green-400">✓</span>
-                Supported Executors
+                Supported Executors (2026)
               </h3>
               <div className="flex flex-wrap gap-2">
-                {['Delta', 'Velocity', 'Xeno', 'Wave', 'Synapse Z', 'Fluxus', 'Krnl', 'Script-Ware'].map(e => (
+                {['Delta', 'Velocity', 'Xeno', 'Wave', 'Synapse Z', 'Fluxus', 'Krnl', 'Solara', 'Arceus X', 'Codex'].map(e => (
                   <span key={e} className="px-3 py-1 text-sm rounded-full bg-[#151519] border border-[#1f1f28] text-zinc-300">
                     {e}
                   </span>
@@ -292,7 +324,7 @@ export default function Home() {
                 Supported UI Libraries
               </h3>
               <div className="flex flex-wrap gap-2">
-                {['Rayfield', 'Fluent', 'Orion', 'Kavo', 'Venyx', 'Material', 'Drawing API'].map(e => (
+                {['Rayfield', 'Fluent', 'Orion', 'Kavo', 'Venyx', 'Material', 'Drawing API', 'Linoria'].map(e => (
                   <span key={e} className="px-3 py-1 text-sm rounded-full bg-[#151519] border border-[#1f1f28] text-zinc-300">
                     {e}
                   </span>
@@ -313,12 +345,16 @@ export default function Home() {
           <div className="space-y-4">
             {[
               {
+                q: 'What is MBA Obfuscation?',
+                a: 'MBA (Mixed Boolean-Arithmetic) obfuscation transforms simple expressions like x+y into complex bit operations that are equivalent but much harder to understand.'
+              },
+              {
                 q: 'Does this work with all executors?',
                 a: 'Yes. The obfuscator is optimized for all 2026 executors including Delta, Velocity, Xeno, Wave, and more. It uses LuaU-safe techniques only.'
               },
               {
-                q: 'Will my loadstring scripts work?',
-                a: 'Absolutely. Scripts using loadstring(game:HttpGet(...))() work perfectly. URLs and strings are encrypted but decrypted correctly at runtime.'
+                q: 'What are the 4 layers of string encryption?',
+                a: 'Layer 1: XOR with derived key. Layer 2: Byte rotation. Layer 3: Add with carry. Layer 4: Byte permutation. Each string is also split into chunks.'
               },
               {
                 q: 'Is my code stored anywhere?',
@@ -326,11 +362,7 @@ export default function Home() {
               },
               {
                 q: 'Why is the output larger than input?',
-                a: 'The obfuscator adds encryption, anti-tamper checks, and control flow protection. This increases size but provides strong security.'
-              },
-              {
-                q: 'What is Prometheus?',
-                a: 'Prometheus is an open-source Lua obfuscator created by Levno_710. This is a web port optimized for Roblox executors.'
+                a: 'The obfuscator adds encryption, anti-tamper checks, control flow, and junk code. This increases size but provides strong security.'
               },
             ].map((faq, i) => (
               <div key={i} className="card p-6">

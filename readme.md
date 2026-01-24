@@ -1,23 +1,39 @@
-# 🔥 Prometheus v2.0 Enhanced
+# 🔥 Prometheus v3.0 Ultimate 2026
 [![Test](https://github.com/prometheus-lua/Prometheus/actions/workflows/Test.yml/badge.svg)](https://github.com/prometheus-lua/Prometheus/actions/workflows/Test.yml)
+[![Version](https://img.shields.io/badge/version-3.0-blue.svg)](https://github.com/prometheus-lua/Prometheus)
+[![Lua](https://img.shields.io/badge/Lua-5.1%20%7C%20LuaU-purple.svg)](https://lua.org)
+[![License](https://img.shields.io/badge/license-AGPL--3.0-green.svg)](LICENSE)
 
 ## Description
-Prometheus is a professional Lua obfuscator written in pure Lua with advanced protection features.
+Prometheus is a professional Lua obfuscator written in pure Lua with next-generation protection features.
 
 This Project was inspired by the amazing [javascript-obfuscator](https://github.com/javascript-obfuscator/javascript-obfuscator).   
-It can obfuscate Lua51 and Roblox's LuaU with comprehensive protection.
+It can obfuscate Lua51 and Roblox's LuaU with comprehensive military-grade protection.
 
-### ✨ New in v2.0 Enhanced
-- **Control Flow Flattening** - Transforms code into state machines
-- **Opaque Predicates** - Complex always-true/false conditions
-- **Junk Code Insertion** - Dead code to confuse analysis
-- **Call Indirection** - Indirect function calls via dispatch tables
-- **String to Bytes** - Convert strings to byte arrays
-- **Improved String Encryption** - XOR layer + optimized O(n) decryption
-- **Enhanced Anti-Tamper** - Scattered checks, silent corruption mode
-- **New Name Generators** - Homoglyph, Dictionary, Unicode, Minimal
-- **New Presets** - Maximum, Performance, LuaU, StringsOnly
-- **Web Interface** - Beautiful web UI for online obfuscation
+### ✨ New in v3.0 Ultimate 2026
+- **MBA Obfuscation** - Mixed Boolean-Arithmetic expressions for impenetrable math operations
+- **Advanced Control Flow** - State machines with closures and encoded state transitions
+- **Advanced Opaque Predicates** - Multi-layer complex always-true/false conditions
+- **Multi-Layer String Encryption** - Up to 4 layers of encryption with chunk splitting
+- **Reference Hiding** - Hide global references and wrap function calls
+- **Dead Code Polymorphism** - Polymorphic dead code that mutates on each run
+- **Double VM Protection** - Two layers of custom bytecode VM
+- **Enhanced Anti-Tamper** - Scattered integrity checks with silent corruption mode
+- **New 2026 Presets** - Ultimate2026, Stealth2026, Performance2026
+
+### 🎮 Executor Compatibility 2026
+| Executor | Status | Notes |
+|----------|--------|-------|
+| Synapse X | ✅ Full | All features supported |
+| Script-Ware | ✅ Full | All features supported |
+| Krnl | ✅ Full | All features supported |
+| Fluxus | ✅ Full | All features supported |
+| Hydrogen | ✅ Full | All features supported |
+| Arceus X | ✅ Full | All features supported |
+| Delta | ✅ Full | All features supported |
+| Codex | ✅ Full | All features supported |
+| Solara | ✅ Full | All features supported |
+| AWP | ✅ Full | All features supported |
 
 📖 [Full Documentation](https://levno-710.gitbook.io/prometheus/) | 💬 [Discord](https://discord.gg/U8h4d4Rf64)
 
@@ -49,9 +65,22 @@ To quickly obfuscate a script:
 ```batch
 lua ./cli.lua --preset Medium ./your_file.lua
 ```
+
+### Using New 2026 Presets
+```batch
+# Ultimate protection with double VM
+lua ./cli.lua --preset Ultimate2026 ./your_file.lua
+
+# Stealth mode - code appears legitimate
+lua ./cli.lua --preset Stealth2026 ./your_file.lua
+
+# Performance optimized protection
+lua ./cli.lua --preset Performance2026 ./your_file.lua
+```
+
 When using the windows release:
 ```batch
-prometheus.exe --preset Medium ./your_file.lua
+prometheus.exe --preset Ultimate2026 ./your_file.lua
 ```
 For more advanced use cases see the [Documentation](https://levno-710.gitbook.io/prometheus/).
 
@@ -63,13 +92,17 @@ For more advanced use cases see the [Documentation](https://levno-710.gitbook.io
 | `Weak` | Light obfuscation with VM |
 | `Medium` | Balanced protection (default) |
 | `Strong` | Strong protection with double VM |
-| `Maximum` | Maximum security with all steps |
+| `Maximum` | Maximum security with all steps + advanced features |
 | `Performance` | Fast execution, minimal overhead |
-| `LuaU` | Roblox-optimized (no debug library) |
+| `LuaU` | Roblox-optimized (no debug library) + advanced features |
 | `StringsOnly` | Only string-related obfuscation |
+| **`Ultimate2026`** | 🔥 Ultimate protection with double VM and all advanced steps |
+| **`Stealth2026`** | 🥷 Stealth mode - code appears legitimate but protected |
+| **`Performance2026`** | ⚡ Maximum protection with minimum runtime overhead |
 
 ## Obfuscation Steps
 
+### Core Steps
 | Step | Description |
 |------|-------------|
 | `Vmify` | Custom bytecode VM with randomized opcodes |
@@ -84,6 +117,56 @@ For more advanced use cases see the [Documentation](https://levno-710.gitbook.io
 | `NumbersToExpressions` | Number obfuscation |
 | `ProxifyLocals` | Local variable proxying |
 | `WrapInFunction` | Closure wrapping |
+| `SplitStrings` | String splitting |
+
+### 🆕 Advanced Steps (v3.0)
+| Step | Description |
+|------|-------------|
+| `MBAObfuscation` | Mixed Boolean-Arithmetic expressions - transforms simple math into complex equivalent expressions |
+| `AdvancedControlFlow` | Enhanced control flow with closures and state encoding |
+| `AdvancedOpaquePredicates` | Multi-layer predicates with configurable complexity |
+| `MultiLayerStringEncryption` | Up to 4 layers of encryption with optional chunk splitting |
+| `ReferenceHiding` | Hides global references and optionally wraps function calls |
+| `DeadCodePolymorphism` | Polymorphic dead code that changes on each obfuscation |
+
+## Advanced Features
+
+### MBA Obfuscation
+Transforms simple arithmetic into complex Mixed Boolean-Arithmetic expressions:
+```lua
+-- Before
+local x = a + b
+
+-- After (equivalent but obfuscated)
+local x = ((a ^ b) + 2 * (a & b))
+```
+
+### Multi-Layer String Encryption
+Encrypts strings through multiple layers with different algorithms:
+```lua
+Settings = {
+    Layers = 4;        -- Number of encryption layers
+    SplitChunks = true; -- Split strings into chunks before encrypting
+}
+```
+
+### Reference Hiding
+Hides global variable access and function calls:
+```lua
+Settings = {
+    HideGlobals = true;    -- Hide global variable references
+    WrapFunctions = true;  -- Wrap function calls in closures
+}
+```
+
+### Advanced Control Flow
+Enhanced state machine with closures:
+```lua
+Settings = {
+    UseClosures = true;    -- Use closures for state transitions
+    StateEncoding = true;  -- Encode state values
+}
+```
 
 ## Tests
 To perform the Prometheus Tests, just run

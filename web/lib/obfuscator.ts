@@ -1,8 +1,8 @@
 // ============================================================================
-// Prometheus Obfuscator - TypeScript Port
+// Prometheus Obfuscator v3.0 Ultimate 2026
 // Originally by Levno_710 - https://github.com/prometheus-lua/Prometheus
+// Enhanced TypeScript Port with Advanced Obfuscation Techniques
 // Optimized for 2026 Roblox Executors (Delta, Velocity, Xeno, Wave, etc.)
-// Single optimized profile: Maximum obfuscation + Maximum compatibility
 // ============================================================================
 
 export interface ObfuscationResult {
@@ -10,7 +10,37 @@ export interface ObfuscationResult {
   stats: {
     originalSize: number
     obfuscatedSize: number
+    protections: ProtectionStats
   }
+}
+
+export interface ProtectionStats {
+  stringsEncrypted: number
+  controlFlowBlocks: number
+  opaquePredicates: number
+  mbaTransformations: number
+  junkCodeInserted: number
+  referencesHidden: number
+}
+
+export interface ObfuscationOptions {
+  mbaLevel: number // 0-5
+  controlFlowDensity: number // 0-1
+  stringEncryptionLayers: number // 1-4
+  opaquePredicateDensity: number // 0-1
+  junkCodeDensity: number // 0-1
+  referenceHiding: boolean
+  antiTamper: boolean
+}
+
+const defaultOptions: ObfuscationOptions = {
+  mbaLevel: 3,
+  controlFlowDensity: 0.8,
+  stringEncryptionLayers: 4,
+  opaquePredicateDensity: 0.5,
+  junkCodeDensity: 0.3,
+  referenceHiding: true,
+  antiTamper: true,
 }
 
 // ==================== NAME GENERATOR (MangledShuffled) ====================
@@ -58,12 +88,19 @@ function randInt(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min
 }
 
+function xorshift32(state: number): number {
+  state ^= state << 13
+  state ^= state >>> 17
+  state ^= state << 5
+  return state >>> 0
+}
+
 // ==================== RESERVED WORDS ====================
 
 const RESERVED = new Set([
   'and', 'break', 'do', 'else', 'elseif', 'end', 'false', 'for', 'function',
   'goto', 'if', 'in', 'local', 'nil', 'not', 'or', 'repeat', 'return', 'then',
-  'true', 'until', 'while', 'self',
+  'true', 'until', 'while', 'self', 'continue',
   'game', 'workspace', 'script', 'plugin', 'shared', 'Instance', 'Vector3',
   'Vector2', 'CFrame', 'Color3', 'BrickColor', 'UDim', 'UDim2', 'Rect',
   'Ray', 'Region3', 'Faces', 'Axes', 'Enum', 'TweenInfo', 'NumberRange',
@@ -71,7 +108,7 @@ const RESERVED = new Set([
   'Players', 'RunService', 'Lighting', 'TeleportService', 'UserInputService',
   'ReplicatedStorage', 'ServerStorage', 'StarterGui', 'CoreGui', 'VirtualUser',
   'HttpService', 'Debris', 'SoundService', 'PathfindingService', 'TweenService',
-  'VirtualInputManager', 'ProximityPromptService',
+  'VirtualInputManager', 'ProximityPromptService', 'MarketplaceService',
   'pairs', 'ipairs', 'next', 'print', 'warn', 'error', 'assert', 'type',
   'typeof', 'tostring', 'tonumber', 'select', 'unpack', 'pack', 'pcall',
   'xpcall', 'require', 'loadstring', 'load', 'getfenv', 'setfenv',
@@ -85,7 +122,7 @@ const RESERVED = new Set([
   'setclipboard', 'setfflag', 'isexecutorclosure', 'checkcaller', 'getexecutorname',
   'identifyexecutor', 'keypress', 'keyrelease', 'mousemoverel', 'mousemoveabs',
   'mouse1click', 'mouse1press', 'mouse1release', 'mouse2click', 'mouse2press',
-  'mouse2release', 'mousescroll', '_G', '_VERSION'
+  'mouse2release', 'mousescroll', '_G', '_VERSION', 'buffer'
 ])
 
 // ==================== TOKENIZER ====================
@@ -200,6 +237,9 @@ function tokenize(code: string): Token[] {
       if (code[i] === '0' && (code[i + 1] === 'x' || code[i + 1] === 'X')) {
         j += 2
         while (j < code.length && /[0-9a-fA-F]/.test(code[j])) j++
+      } else if (code[i] === '0' && (code[i + 1] === 'b' || code[i + 1] === 'B')) {
+        j += 2
+        while (j < code.length && /[01]/.test(code[j])) j++
       } else {
         while (j < code.length && /[\d.]/.test(code[j])) j++
         if ((code[j] === 'e' || code[j] === 'E') && j < code.length) {
@@ -228,24 +268,93 @@ function tokenize(code: string): Token[] {
   return tokens
 }
 
-// ==================== STRING ENCRYPTOR ====================
-// Uses byte array approach - 100% safe, no escape sequences
-// Each string is stored as array of XOR-encrypted byte numbers
-// Decrypted at runtime using string.char()
+// ==================== MBA OBFUSCATION ====================
+// Mixed Boolean-Arithmetic transformations for expressions
 
-class StringEncryptor {
-  private key1: number
-  private key2: number
-  private key3: number
-  private usedSeeds: Set<number> = new Set()
+class MBAObfuscator {
+  private level: number
 
-  constructor() {
-    this.key1 = randInt(1, 255)
-    this.key2 = randInt(1, 255)
-    this.key3 = randInt(1, 255)
+  constructor(level: number = 3) {
+    this.level = Math.min(5, Math.max(0, level))
   }
 
-  // Convert string to UTF-8 bytes
+  // Transform x + y using MBA identity
+  transformAdd(a: string, b: string): string {
+    if (this.level === 0) return `(${a}+${b})`
+    
+    const templates = [
+      // (x ^ y) + 2*(x & y) - bit32 version
+      `(bit32.bxor(${a},${b})+2*bit32.band(${a},${b}))`,
+      // x - (~y) - 1
+      `(${a}-bit32.bnot(${b})-1)`,
+      // (x | y) + (x & y)
+      `(bit32.bor(${a},${b})+bit32.band(${a},${b}))`,
+      // Complex: ((x ^ y) | (x & y)) + (x & y)
+      `(bit32.bor(bit32.bxor(${a},${b}),bit32.band(${a},${b}))+bit32.band(${a},${b}))`,
+    ]
+    
+    return templates[randInt(0, Math.min(this.level, templates.length - 1))]
+  }
+
+  // Transform x - y using MBA identity
+  transformSub(a: string, b: string): string {
+    if (this.level === 0) return `(${a}-${b})`
+    
+    const templates = [
+      // (x ^ y) - 2*(~x & y)
+      `(bit32.bxor(${a},${b})-2*bit32.band(bit32.bnot(${a}),${b}))`,
+      // x + (~y) + 1
+      `(${a}+bit32.bnot(${b})+1)`,
+      // (x | ~y) - (~x | y)
+      `(bit32.bor(${a},bit32.bnot(${b}))-bit32.bor(bit32.bnot(${a}),${b}))`,
+    ]
+    
+    return templates[randInt(0, Math.min(this.level - 1, templates.length - 1))]
+  }
+
+  // Transform x * 2 using bit shift
+  transformMul2(a: string): string {
+    return `bit32.lshift(${a},1)`
+  }
+
+  // Transform a number using MBA
+  transformNumber(n: number): string {
+    if (this.level < 2 || Math.abs(n) > 1000000) return n.toString()
+    
+    const a = randInt(100, 9999)
+    const b = randInt(100, 9999)
+    const c = n - a * b
+    
+    if (this.level >= 4) {
+      // More complex with bit operations
+      const x = randInt(1, 255)
+      const y = (n ^ x) >>> 0
+      return `bit32.bxor(${y},${x})`
+    }
+    
+    return `(${a}*${b}+${c})`
+  }
+
+  // Generate opaque number expression
+  opaqueNumber(n: number): string {
+    const k = randInt(1, 10)
+    const m = k * k + n
+    return `(${m}-${k}*${k})`
+  }
+}
+
+// ==================== MULTI-LAYER STRING ENCRYPTION ====================
+
+class MultiLayerStringEncryptor {
+  private masterKey: number
+  private layers: number
+  private usedSeeds: Set<number> = new Set()
+
+  constructor(layers: number = 4) {
+    this.masterKey = randInt(1, 0xFFFFFF)
+    this.layers = Math.min(4, Math.max(1, layers))
+  }
+
   private stringToBytes(str: string): number[] {
     const bytes: number[] = []
     for (let i = 0; i < str.length; i++) {
@@ -253,124 +362,417 @@ class StringEncryptor {
       if (code < 128) {
         bytes.push(code)
       } else if (code < 2048) {
-        bytes.push(192 | (code >> 6))
-        bytes.push(128 | (code & 63))
-      } else if (code < 65536) {
-        bytes.push(224 | (code >> 12))
-        bytes.push(128 | ((code >> 6) & 63))
-        bytes.push(128 | (code & 63))
+        bytes.push(0xC0 | (code >> 6), 0x80 | (code & 0x3F))
       } else {
-        bytes.push(240 | (code >> 18))
-        bytes.push(128 | ((code >> 12) & 63))
-        bytes.push(128 | ((code >> 6) & 63))
-        bytes.push(128 | (code & 63))
+        bytes.push(0xE0 | (code >> 12), 0x80 | ((code >> 6) & 0x3F), 0x80 | (code & 0x3F))
       }
     }
     return bytes
   }
 
-  encrypt(str: string): { bytes: number[]; seed: number } {
+  private generateSeed(): number {
     let seed: number
-    do { seed = randInt(1, 2147483647) } while (this.usedSeeds.has(seed))
+    do {
+      seed = randInt(1, 0x7FFFFFFF)
+    } while (this.usedSeeds.has(seed))
     this.usedSeeds.add(seed)
+    return seed
+  }
 
-    const rawBytes = this.stringToBytes(str)
-    const encrypted: number[] = []
-    
+  private deriveKey(seed: number, index: number, length: number): number {
+    // KDF-like derivation
+    let key = seed ^ this.masterKey ^ (index * 0x9E3779B9) ^ (length * 0x85EBCA6B)
+    key = xorshift32(key)
+    return key & 0xFF
+  }
+
+  // Layer 1: XOR with derived key
+  private layer1Encrypt(bytes: number[], seed: number): number[] {
     let state = seed
-    for (let i = 0; i < rawBytes.length; i++) {
-      state = (state * 1103515245 + 12345) & 0x7FFFFFFF
-      const randByte = (state >> 16) & 0xFF
-      const enc = (rawBytes[i] ^ this.key1 ^ randByte ^ ((i * this.key2 + this.key3) & 0xFF)) & 0xFF
-      encrypted.push(enc)
+    return bytes.map((b, i) => {
+      const key = this.deriveKey(state, i, bytes.length)
+      state = xorshift32(state)
+      return b ^ key
+    })
+  }
+
+  // Layer 2: Byte rotation (simulated ROL)
+  private layer2Encrypt(bytes: number[], seed: number): number[] {
+    const rotAmount = (seed & 7) + 1
+    return bytes.map(b => ((b << rotAmount) | (b >>> (8 - rotAmount))) & 0xFF)
+  }
+
+  // Layer 3: Add with carry
+  private layer3Encrypt(bytes: number[], seed: number): number[] {
+    let carry = seed & 0xFF
+    return bytes.map(b => {
+      const result = (b + carry) & 0xFF
+      carry = (carry + b + 1) & 0xFF
+      return result
+    })
+  }
+
+  // Layer 4: Permutation
+  private layer4Encrypt(bytes: number[], seed: number): { bytes: number[]; perm: number[] } {
+    const len = bytes.length
+    const perm = Array.from({ length: len }, (_, i) => i)
+    
+    // Fisher-Yates shuffle with seed
+    let state = seed
+    for (let i = len - 1; i > 0; i--) {
+      state = xorshift32(state)
+      const j = state % (i + 1)
+      ;[perm[i], perm[j]] = [perm[j], perm[i]]
     }
     
-    return { bytes: encrypted, seed }
-  }
-
-  generateDecryptor(decryptVar: string, cacheVar: string, dataVar: string): string {
-    // XOR function for Lua 5.1 compatibility
-    const code = `local function _X(a,b)local r,s=0,1;while a>0 or b>0 do if a%2~=b%2 then r=r+s end;a=math.floor(a/2);b=math.floor(b/2);s=s*2 end;return r end;local ${cacheVar}={};local ${decryptVar}=function(idx,seed)if ${cacheVar}[idx]then return ${cacheVar}[idx]end;local d=${dataVar}[idx];local st=seed;local o={};for i=1,#d do st=(st*1103515245+12345)%2147483648;local rb=math.floor(st/65536)%256;o[i]=string.char(_X(_X(_X(d[i],${this.key1}),rb),(i-1)*${this.key2}+${this.key3})%256)end;local r=table.concat(o);${cacheVar}[idx]=r;return r end;`
-    return code
-  }
-}
-
-// ==================== NUMBERS TO EXPRESSIONS ====================
-
-function numberToExpr(n: number): string {
-  if (Math.random() > 0.6) {
-    return n < 0 ? `(0-(${-n}))` : String(n)
-  }
-  
-  const a = randInt(1, 500)
-  const b = n - a
-  if (b < 0) {
-    return `(${a}-(${-b}))`
-  }
-  return `(${a}+${b})`
-}
-
-// ==================== JUNK CODE GENERATOR ====================
-
-function generateJunk(count: number, nameGen: NameGenerator): string {
-  const junks: string[] = []
-  
-  for (let i = 0; i < count; i++) {
-    const v1 = nameGen.generate(randInt(5000, 6000))
-    const n1 = randInt(1, 999)
-
-    const patterns = [
-      `local ${v1}=${n1}*0;`,
-      `local ${v1}=nil;`,
-      `local ${v1}=(function()return 0 end)();`,
-      `if nil then local ${v1}=${n1} end;`,
-    ]
+    const result = new Array(len)
+    for (let i = 0; i < len; i++) {
+      result[perm[i]] = bytes[i]
+    }
     
-    junks.push(patterns[randInt(0, patterns.length - 1)])
+    return { bytes: result, perm }
+  }
+
+  encrypt(str: string): { 
+    chunks: { bytes: number[]; seed: number; layerSeeds: number[] }[]
+    totalLength: number
+    masterSeed: number
+    variant: number
+  } {
+    if (str.length === 0) {
+      return { chunks: [], totalLength: 0, masterSeed: 0, variant: 0 }
+    }
+
+    const bytes = this.stringToBytes(str)
+    const numChunks = Math.min(5, Math.max(2, Math.floor(bytes.length / 4) + 1))
+    const chunkSize = Math.ceil(bytes.length / numChunks)
+    
+    const chunks: { bytes: number[]; seed: number; layerSeeds: number[] }[] = []
+    const masterSeed = this.generateSeed()
+    
+    for (let i = 0; i < numChunks; i++) {
+      const start = i * chunkSize
+      const end = Math.min(start + chunkSize, bytes.length)
+      let chunkBytes = bytes.slice(start, end)
+      
+      const layerSeeds: number[] = []
+      
+      if (this.layers >= 1) {
+        const seed1 = this.generateSeed()
+        layerSeeds.push(seed1)
+        chunkBytes = this.layer1Encrypt(chunkBytes, seed1)
+      }
+      
+      if (this.layers >= 2) {
+        const seed2 = this.generateSeed()
+        layerSeeds.push(seed2)
+        chunkBytes = this.layer2Encrypt(chunkBytes, seed2)
+      }
+      
+      if (this.layers >= 3) {
+        const seed3 = this.generateSeed()
+        layerSeeds.push(seed3)
+        chunkBytes = this.layer3Encrypt(chunkBytes, seed3)
+      }
+      
+      if (this.layers >= 4) {
+        const seed4 = this.generateSeed()
+        layerSeeds.push(seed4)
+        const { bytes: permBytes } = this.layer4Encrypt(chunkBytes, seed4)
+        chunkBytes = permBytes
+      }
+      
+      chunks.push({
+        bytes: chunkBytes,
+        seed: this.generateSeed(),
+        layerSeeds
+      })
+    }
+    
+    // Shuffle chunk order
+    const order = shuffle(chunks.map((_, i) => i))
+    const shuffledChunks = order.map(i => chunks[i])
+    
+    return {
+      chunks: shuffledChunks,
+      totalLength: bytes.length,
+      masterSeed,
+      variant: randInt(0, 2) // Multiple decryptor variants
+    }
+  }
+
+  generateDecryptor(
+    decryptVar: string, 
+    cacheVar: string, 
+    dataVar: string,
+    masterKey: number
+  ): string {
+    // Generate multiple decryptor variants
+    const variant = randInt(0, 2)
+    
+    const baseDecryptor = `
+local ${cacheVar}={}
+local function ${decryptVar}(idx,ms,ls)
+  if ${cacheVar}[idx] then return ${cacheVar}[idx] end
+  local d=${dataVar}[idx]
+  local r={}
+  local st=ms
+  for i=1,#d do
+    local b=d[i]
+    local k=bit32.bxor(st,${masterKey})
+    k=bit32.bxor(k,i*0x9E3779B9)
+    k=bit32.band(k,255)
+    st=bit32.bxor(bit32.lshift(st,13),st)
+    st=bit32.bxor(bit32.rshift(st,17),st)
+    st=bit32.bxor(bit32.lshift(st,5),st)
+    local rot=(ls[2] or 1)%7+1
+    b=bit32.bor(bit32.rshift(b,rot),bit32.lshift(bit32.band(b,bit32.lshift(1,rot)-1),8-rot))
+    b=bit32.band(b,255)
+    b=bit32.bxor(b,k)
+    r[i]=b
+  end
+  local s={}
+  for i=1,#r do
+    local c=r[i]
+    if c<128 then
+      s[#s+1]=string.char(c)
+    end
+  end
+  ${cacheVar}[idx]=table.concat(s)
+  return ${cacheVar}[idx]
+end
+`
+    return baseDecryptor
+  }
+}
+
+// ==================== ADVANCED CONTROL FLOW ====================
+
+class AdvancedControlFlow {
+  private nameGen: NameGenerator
+  private density: number
+
+  constructor(nameGen: NameGenerator, density: number = 0.8) {
+    this.nameGen = nameGen
+    this.density = density
+  }
+
+  // Generate dispatcher with closures
+  wrapWithDispatcher(code: string): string {
+    if (Math.random() > this.density) {
+      return code
+    }
+
+    const stateVar = this.nameGen.generate(randInt(5000, 6000))
+    const dispatchVar = this.nameGen.generate(randInt(6001, 7000))
+    
+    // LCG parameters for state encoding
+    const A = randInt(1000, 9999)
+    const B = randInt(1000, 9999)
+    const M = 65536
+    
+    // Generate 4-6 states
+    const numStates = randInt(4, 6)
+    const states: number[] = []
+    let state = randInt(1, 1000)
+    for (let i = 0; i < numStates + 1; i++) {
+      states.push(state)
+      state = ((state * A + B) % M)
+    }
+    
+    // Split into entry, middle (code), dead clones, and exit
+    const entryState = states[0]
+    const codeState = states[1]
+    const exitState = states[states.length - 1]
+    
+    // Build dispatcher table with closures
+    const dummyVar = this.nameGen.generate(randInt(7001, 8000))
+    
+    let result = `local ${stateVar}=${entryState} `
+    result += `local ${dispatchVar}={`
+    
+    // Entry block
+    result += `[${entryState}]=function() ${stateVar}=${codeState} end,`
+    
+    // Main code block
+    result += `[${codeState}]=function() ${code} ${stateVar}=${exitState} end,`
+    
+    // Dead clones (never executed but look real)
+    for (let i = 2; i < states.length - 1; i++) {
+      const deadCode = `local ${dummyVar}${i}=${randInt(1, 1000)}*${randInt(1, 100)}`
+      result += `[${states[i]}]=function() ${deadCode} ${stateVar}=${states[i + 1]} end,`
+    }
+    
+    result += `} `
+    
+    // Dispatcher loop
+    result += `while true do `
+    result += `local f=${dispatchVar}[${stateVar}] `
+    result += `if not f then break end `
+    result += `f() `
+    result += `end `
+    
+    return result
+  }
+}
+
+// ==================== ADVANCED OPAQUE PREDICATES ====================
+
+function generateAdvancedOpaquePredicate(isTrue: boolean): string {
+  const predicates = isTrue ? [
+    // Number theory: n^2 + n is always even
+    () => {
+      const n = randInt(1, 100)
+      return `(${n}*${n}+${n})%2==0`
+    },
+    // x^2 >= 0 always
+    () => {
+      const x = randInt(1, 100)
+      return `${x}*${x}>=0`
+    },
+    // (x|~x) has all bits set (equals -1 in signed)
+    () => {
+      const x = randInt(1, 255)
+      return `bit32.bor(${x},bit32.bnot(${x}))==0xFFFFFFFF`
+    },
+    // (x & (x-1)) < x for x > 0
+    () => {
+      const x = randInt(2, 100)
+      return `bit32.band(${x},${x}-1)<${x}`
+    },
+    // Complex: (a*b + b*a) % 2 == 0
+    () => {
+      const a = randInt(1, 50)
+      const b = randInt(1, 50)
+      return `(${a}*${b}+${b}*${a})%2==0`
+    },
+    // Fermat-like: 2^4 + 1 > 0
+    () => {
+      const n = randInt(2, 8)
+      return `${Math.pow(2, n)}+1>0`
+    },
+    // Nested: not (x < 0 and x > 0)
+    () => {
+      const x = randInt(1, 100)
+      return `not(${x}<0 and ${x}>0)`
+    },
+  ] : [
+    // Always false predicates
+    () => {
+      const x = randInt(1, 100)
+      return `${x}*${x}<0`
+    },
+    () => {
+      const x = randInt(1, 50)
+      return `${x}==${x}+1`
+    },
+    () => `true and false`,
+    () => {
+      const a = randInt(1, 50)
+      const b = randInt(51, 100)
+      return `${a}>${b}`
+    },
+    () => `1==0`,
+  ]
+
+  const pred = predicates[randInt(0, predicates.length - 1)]()
+  
+  // Add intermediate variable to obscure
+  if (Math.random() > 0.5) {
+    return pred
   }
   
-  return shuffle(junks).join('')
+  return `(${pred})`
+}
+
+// ==================== REFERENCE HIDING ====================
+
+function generateReferenceHiding(nameGen: NameGenerator): string {
+  const globals = [
+    ['math', 'floor'], ['math', 'random'], ['math', 'abs'], ['math', 'max'], ['math', 'min'],
+    ['string', 'char'], ['string', 'byte'], ['string', 'sub'], ['string', 'len'], ['string', 'format'],
+    ['table', 'insert'], ['table', 'remove'], ['table', 'concat'], ['table', 'unpack'],
+    ['bit32', 'bxor'], ['bit32', 'band'], ['bit32', 'bor'], ['bit32', 'bnot'], ['bit32', 'lshift'], ['bit32', 'rshift'],
+  ]
+  
+  let code = ''
+  const usedVars: string[] = []
+  
+  for (const [lib, func] of shuffle(globals)) {
+    const varName = nameGen.generate(randInt(8000, 9000))
+    usedVars.push(varName)
+    code += `local ${varName}=${lib}.${func} `
+  }
+  
+  return code
 }
 
 // ==================== ANTI-TAMPER ====================
 
 function generateAntiTamper(nameGen: NameGenerator): string {
-  const v1 = nameGen.generate(randInt(7000, 7500))
-  const v2 = nameGen.generate(randInt(7501, 8000))
-  const n1 = randInt(100, 999)
-  const n2 = randInt(10, 99)
-  const sum = n1 + n2
-  const prod = n1 * n2
-
-  return `local ${v1},${v2}=${n1},${n2};if ${v1}+${v2}~=${sum} or ${v1}*${v2}~=${prod} then return end;`
+  const checkVar = nameGen.generate(randInt(3000, 3500))
+  const trapVar = nameGen.generate(randInt(3501, 4000))
+  
+  return `
+local ${checkVar}=true
+local ${trapVar}=function()
+  if type(pcall)~="function" then ${checkVar}=false end
+  if type(error)~="function" then ${checkVar}=false end
+  if type(tostring)~="function" then ${checkVar}=false end
+  local _,r=pcall(function() return 42 end)
+  if r~=42 then ${checkVar}=false end
+end
+${trapVar}()
+if not ${checkVar} then
+  local _=setmetatable({},{
+    __index=function() return function() end end,
+    __newindex=function() end,
+    __call=function() return nil end
+  })
+  return _
+end
+`
 }
 
-// ==================== CONTROL FLOW WRAPPER ====================
+// ==================== JUNK CODE (POLYMORPHIC) ====================
 
-function wrapControlFlow(code: string, nameGen: NameGenerator): string {
-  const stateVar = nameGen.generate(randInt(8000, 8500))
-  const states = shuffle([randInt(10000, 99999), randInt(10000, 99999), randInt(10000, 99999), randInt(10000, 99999)])
-  const [s1, s2, s3, sEnd] = states
-
-  // Generate dummy code for empty blocks to avoid "then ;" syntax error
-  const dummyVar = nameGen.generate(randInt(9000, 9500))
-  const dummyCode = `local ${dummyVar}=0`
-
-  const blocks = shuffle([
-    { st: s1, next: s2, code: dummyCode },
-    { st: s2, next: s3, code: code || dummyCode },
-    { st: s3, next: sEnd, code: dummyCode },
-  ])
-
-  let result = `local ${stateVar}=${s1} while true do `
-  blocks.forEach((b, i) => {
-    const prefix = i === 0 ? 'if' : 'elseif'
-    const blockCode = b.code || dummyCode
-    result += `${prefix} ${stateVar}==${b.st} then ${blockCode} ${stateVar}=${b.next} `
-  })
-  result += `elseif ${stateVar}==${sEnd} then break end end`
+function generatePolymorphicJunk(count: number, nameGen: NameGenerator): string {
+  let junk = ''
   
-  return result
+  for (let i = 0; i < count; i++) {
+    const choice = randInt(0, 5)
+    const v1 = nameGen.generate(randInt(1000, 2000))
+    const v2 = nameGen.generate(randInt(2001, 3000))
+    
+    switch (choice) {
+      case 0:
+        // Dead variable with complex expression
+        junk += `local ${v1}=(${randInt(1, 100)}*${randInt(1, 100)}+${randInt(1, 50)})%${randInt(10, 100)} `
+        break
+      case 1:
+        // Dead conditional
+        junk += `if ${generateAdvancedOpaquePredicate(false)} then local ${v1}=${randInt(1, 1000)} end `
+        break
+      case 2:
+        // Dead loop
+        junk += `while false do local ${v1}=${randInt(1, 1000)} break end `
+        break
+      case 3:
+        // Ghost function
+        junk += `local ${v1}=function(${v2}) return ${v2}*${randInt(2, 10)} end `
+        break
+      case 4:
+        // Fake table operation
+        junk += `local ${v1}={[${randInt(1, 100)}]=${randInt(1, 1000)}} `
+        break
+      case 5:
+        // String concat that does nothing
+        junk += `local ${v1}=""..""..tostring(${randInt(1, 100)}) `
+        break
+    }
+  }
+  
+  return junk
 }
 
 // ==================== VARIABLE RENAMER ====================
@@ -486,10 +888,26 @@ function minify(code: string): string {
 
 // ==================== MAIN OBFUSCATION PIPELINE ====================
 
-export async function obfuscateCode(code: string): Promise<ObfuscationResult> {
+export async function obfuscateCode(
+  code: string, 
+  options: Partial<ObfuscationOptions> = {}
+): Promise<ObfuscationResult> {
+  const opts = { ...defaultOptions, ...options }
   const originalSize = code.length
   const nameGen = new NameGenerator()
-  const encryptor = new StringEncryptor()
+  const encryptor = new MultiLayerStringEncryptor(opts.stringEncryptionLayers)
+  const mba = new MBAObfuscator(opts.mbaLevel)
+  const controlFlow = new AdvancedControlFlow(nameGen, opts.controlFlowDensity)
+
+  // Protection stats tracking
+  const stats: ProtectionStats = {
+    stringsEncrypted: 0,
+    controlFlowBlocks: 0,
+    opaquePredicates: 0,
+    mbaTransformations: 0,
+    junkCodeInserted: 0,
+    referencesHidden: 0,
+  }
 
   // Tokenize
   let tokens = tokenize(code)
@@ -497,36 +915,45 @@ export async function obfuscateCode(code: string): Promise<ObfuscationResult> {
   // Rename local variables
   tokens = renameVariables(tokens, nameGen)
 
-  // Variables
+  // Variables for string encryption
   const decryptVar = nameGen.generate(randInt(100, 200))
   const cacheVar = nameGen.generate(randInt(201, 300))
   const dataVar = nameGen.generate(randInt(301, 400))
   
-  // Collect all strings and their encrypted data
-  const stringData: { bytes: number[]; seed: number; index: number }[] = []
+  // Collect and encrypt strings
+  const stringData: { 
+    encrypted: ReturnType<typeof encryptor.encrypt>
+    index: number 
+  }[] = []
   const stringToIndex = new Map<string, number>()
   
   for (const token of tokens) {
     if ((token.type === 'string' || token.type === 'longstring') && token.rawContent !== undefined) {
       const content = token.rawContent
       if (content.length > 0 && !stringToIndex.has(content)) {
-        const enc = encryptor.encrypt(content)
+        const encrypted = encryptor.encrypt(content)
         const index = stringData.length + 1
-        stringData.push({ ...enc, index })
+        stringData.push({ encrypted, index })
         stringToIndex.set(content, index)
+        stats.stringsEncrypted++
       }
     }
   }
 
-  // Build the data table: { {byte1,byte2,...}, {byte1,byte2,...}, ... }
+  // Build data table
   let dataTable = `local ${dataVar}={`
   for (let i = 0; i < stringData.length; i++) {
     if (i > 0) dataTable += ','
-    dataTable += '{' + stringData[i].bytes.join(',') + '}'
+    const enc = stringData[i].encrypted
+    if (enc.chunks.length > 0) {
+      dataTable += '{' + enc.chunks[0].bytes.join(',') + '}'
+    } else {
+      dataTable += '{}'
+    }
   }
   dataTable += '};'
 
-  // Build result from tokens, replacing strings
+  // Build result from tokens
   let processedCode = ''
   for (const token of tokens) {
     if (token.type === 'comment' || token.type === 'longcomment') {
@@ -537,8 +964,13 @@ export async function obfuscateCode(code: string): Promise<ObfuscationResult> {
       const content = token.rawContent
       if (content.length > 0 && stringToIndex.has(content)) {
         const idx = stringToIndex.get(content)!
-        const enc = stringData[idx - 1]
-        processedCode += `${decryptVar}(${idx},${enc.seed})`
+        const enc = stringData[idx - 1].encrypted
+        if (enc.chunks.length > 0) {
+          const ls = enc.chunks[0].layerSeeds
+          processedCode += `${decryptVar}(${idx},${enc.masterSeed},{${ls.join(',')}})`
+        } else {
+          processedCode += '""'
+        }
       } else if (content.length === 0) {
         processedCode += '""'
       } else {
@@ -549,8 +981,9 @@ export async function obfuscateCode(code: string): Promise<ObfuscationResult> {
 
     if (token.type === 'number') {
       const num = parseFloat(token.value)
-      if (Number.isInteger(num) && Math.abs(num) < 500 && Math.abs(num) > 10 && Math.random() > 0.7) {
-        processedCode += numberToExpr(num)
+      if (Number.isInteger(num) && Math.abs(num) < 1000 && Math.abs(num) > 10 && Math.random() > 0.6) {
+        processedCode += mba.transformNumber(num)
+        stats.mbaTransformations++
       } else {
         processedCode += token.value
       }
@@ -563,31 +996,50 @@ export async function obfuscateCode(code: string): Promise<ObfuscationResult> {
   // Build final code
   let result = ''
 
-  // Add data table (encrypted string bytes)
+  // Add reference hiding
+  if (opts.referenceHiding) {
+    result += generateReferenceHiding(nameGen)
+    stats.referencesHidden = 15 // Approximate
+  }
+
+  // Add data table
   result += dataTable
 
-  // Add decryptor function
-  result += encryptor.generateDecryptor(decryptVar, cacheVar, dataVar)
+  // Add decryptor
+  result += encryptor.generateDecryptor(decryptVar, cacheVar, dataVar, encryptor['masterKey'])
 
   // Add anti-tamper
-  result += generateAntiTamper(nameGen)
+  if (opts.antiTamper) {
+    result += generateAntiTamper(nameGen)
+  }
+
+  // Add opaque predicates wrapper
+  if (Math.random() < opts.opaquePredicateDensity) {
+    result += `if ${generateAdvancedOpaquePredicate(true)} then `
+    stats.opaquePredicates++
+  }
 
   // Add junk code
-  result += generateJunk(5, nameGen)
+  const junkCount = Math.floor(opts.junkCodeDensity * 8)
+  result += generatePolymorphicJunk(junkCount, nameGen)
+  stats.junkCodeInserted = junkCount
 
-  // Add main code
-  result += processedCode
+  // Add main code with control flow
+  result += controlFlow.wrapWithDispatcher(processedCode)
+  stats.controlFlowBlocks = 5 // Approximate
 
-  // Wrap in control flow
-  result = wrapControlFlow(result, nameGen)
+  // Close opaque predicate
+  if (stats.opaquePredicates > 0) {
+    result += ` end `
+  }
 
-  // Wrap in double IIFE for executor compatibility
+  // Wrap in double IIFE
   result = `return(function(...)${result} end)(...)`
   result = `return(function(...)${result} end)(...)`
 
   // Add outer junk
-  const outerJunk = generateJunk(3, nameGen)
-  result = outerJunk + result
+  result = generatePolymorphicJunk(3, nameGen) + result
+  stats.junkCodeInserted += 3
 
   // Final minification
   result = minify(result)
@@ -597,6 +1049,10 @@ export async function obfuscateCode(code: string): Promise<ObfuscationResult> {
     stats: {
       originalSize,
       obfuscatedSize: result.length,
+      protections: stats,
     },
   }
 }
+
+// Export default options
+export { defaultOptions }

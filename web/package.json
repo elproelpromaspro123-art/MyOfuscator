@@ -1,31 +1,37 @@
 {
   "name": "prometheus-obfuscator-web",
-  "version": "1.0.0",
-  "description": "Web interface for Prometheus Lua Obfuscator",
+  "version": "2.0.0",
+  "description": "Web interface for Prometheus Lua Obfuscator - 2026 Edition",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "next": "14.2.28",
-    "react": "18.3.1",
-    "react-dom": "18.3.1",
-    "@monaco-editor/react": "4.6.0",
-    "framer-motion": "11.2.10"
+    "next": "15.1.0",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "@monaco-editor/react": "4.7.0",
+    "framer-motion": "12.0.0",
+    "lucide-react": "0.470.0",
+    "react-syntax-highlighter": "15.6.1"
   },
   "devDependencies": {
-    "@types/node": "20.14.2",
-    "@types/react": "18.3.3",
-    "@types/react-dom": "18.3.0",
-    "typescript": "5.4.5",
-    "tailwindcss": "3.4.4",
-    "postcss": "8.4.38",
-    "autoprefixer": "10.4.19"
+    "@types/node": "22.10.0",
+    "@types/react": "19.0.0",
+    "@types/react-dom": "19.0.0",
+    "@types/react-syntax-highlighter": "15.5.13",
+    "typescript": "5.7.0",
+    "tailwindcss": "3.5.0",
+    "postcss": "8.5.0",
+    "autoprefixer": "10.5.0",
+    "eslint": "9.17.0",
+    "eslint-config-next": "15.1.0"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   }
 }

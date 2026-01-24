@@ -6,8 +6,8 @@ const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://prometheus-obfuscator.vercel.app'),
-  title: 'Prometheus Obfuscator - Lua Obfuscation for Roblox',
-  description: 'The most advanced open-source Lua obfuscator by Levno_710. Protect your Roblox scripts with XOR encryption, control flow obfuscation, and anti-tamper protection. 100% compatible with Delta, Velocity, Xeno, and all 2026 executors.',
+  title: 'Prometheus v3.0 - Ultimate Lua Obfuscator 2026',
+  description: 'The most advanced open-source Lua obfuscator with MBA obfuscation, 4-layer string encryption, control flow flattening, and anti-tamper protection. 100% compatible with Delta, Velocity, Xeno, Wave, and all 2026 Roblox executors.',
   keywords: [
     'lua obfuscator',
     'roblox obfuscator',
@@ -17,12 +17,19 @@ export const metadata: Metadata = {
     'lua encryption',
     'roblox scripts',
     'luau obfuscator',
+    'mba obfuscation',
+    'control flow flattening',
+    'string encryption',
     'delta executor',
     'velocity executor',
     'xeno executor',
     'wave executor',
+    'synapse z',
+    'fluxus',
+    'solara',
     'rayfield',
     'fluent ui',
+    '2026',
   ],
   authors: [{ name: 'Levno_710', url: 'https://github.com/prometheus-lua' }],
   creator: 'Levno_710',
@@ -43,8 +50,8 @@ export const metadata: Metadata = {
     locale: 'en_US',
     url: 'https://prometheus-obfuscator.vercel.app',
     siteName: 'Prometheus Obfuscator',
-    title: 'Prometheus Obfuscator',
-    description: 'Advanced Lua obfuscation for Roblox by Levno_710',
+    title: 'Prometheus v3.0 - Ultimate Lua Obfuscator 2026',
+    description: 'The most advanced open-source Lua obfuscator with MBA, CFG, and multi-layer encryption. 2026 Edition.',
     images: [
       {
         url: '/og-image.png',
