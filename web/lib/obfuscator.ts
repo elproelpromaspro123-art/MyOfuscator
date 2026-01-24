@@ -59,11 +59,36 @@ function randInt(min: number, max: number): number {
 }
 
 function escapeString(str: string): string {
+  // Use Lua-safe escape sequences that won't cause "Malformed number" errors
+  // The issue: \000 followed by digits (like \0001) is ambiguous in Lua
+  // Solution: Use string.char() concatenation for bytes, or ensure separation
   let result = ''
   for (let i = 0; i < str.length; i++) {
     const code = str.charCodeAt(i)
-    if (code < 32 || code > 126 || str[i] === '"' || str[i] === '\\') {
-      result += '\\' + code.toString().padStart(3, '0')
+    const nextChar = str[i + 1]
+    const nextIsDigit = nextChar && /\d/.test(nextChar)
+    
+    if (code === 92) { // backslash
+      result += '\\\\'
+    } else if (code === 34) { // double quote
+      result += '\\"'
+    } else if (code === 10) { // newline
+      result += '\\n'
+    } else if (code === 13) { // carriage return
+      result += '\\r'
+    } else if (code === 9) { // tab
+      result += '\\t'
+    } else if (code < 32 || code > 126) {
+      // For non-printable chars: use 3-digit escape, but if next char is a digit,
+      // we need to ensure the escape is unambiguous
+      // Lua reads up to 3 decimal digits after backslash, so \0001 = \000 + "1"
+      // But \1231 could be \123 + "1" or \12 + "31" - ambiguous!
+      // Solution: always use exactly 3 digits
+      const escaped = '\\' + code.toString().padStart(3, '0')
+      result += escaped
+      // If next char is a digit and our code < 100, Lua might misparse
+      // e.g., \01 followed by "2" looks like \012
+      // But with padStart(3,'0'), \001 followed by "2" is unambiguous as \001 + "2"
     } else {
       result += str[i]
     }
@@ -267,7 +292,9 @@ class StringEncryptor {
   }
 
   generateDecryptor(varName: string, tableVar: string): string {
-    return `local ${varName}=(function()local a={}local b=${this.key1}local c=${this.key2}return function(d,e)if a[e]then return a[e]end;local f=e;local g=""for h=1,#d do f=(f*1103515245+12345)%2147483648;local i=(math.floor(f/65536))%256;local j=d:byte(h)local k=(j~b~i~((h-1)*c%256))%256;g=g..string.char(k)end;a[e]=g;return g end end)();local ${tableVar}={};`
+    // Use custom XOR function for Lua 5.1/LuaU compatibility (no ~ operator in older Lua)
+    // This matches Prometheus's approach in EncryptStrings.lua
+    return `local ${varName}=(function()local a={}local b=${this.key1}local c=${this.key2}local function x(p,q)local r=0;local s=1;while p>0 or q>0 do local t=p%2;local u=q%2;if t~=u then r=r+s end;p=math.floor(p/2);q=math.floor(q/2);s=s*2 end;return r end;return function(d,e)if a[e]then return a[e]end;local f=e;local g=""for h=1,#d do f=(f*1103515245+12345)%2147483648;local i=math.floor(f/65536)%256;local j=d:byte(h);local k=x(x(x(j,b),i),(h-1)*c%256)%256;g=g..string.char(k)end;a[e]=g;return g end end)();local ${tableVar}={};`
   }
 }
 
@@ -349,12 +376,20 @@ class ConstantArray {
 // ==================== NUMBERS TO EXPRESSIONS ====================
 
 function numberToExpr(n: number, depth: number = 0): string {
-  if (depth > 3 || Math.random() > 0.6) return String(n)
+  if (depth > 3 || Math.random() > 0.6) {
+    // For negative numbers at top level, wrap in parentheses to avoid +-
+    return n < 0 ? `(${n})` : String(n)
+  }
   
   const ops = [
     () => {
-      const a = randInt(-10000, 10000)
+      // Use positive values only to avoid +- patterns
+      const a = randInt(1, 10000)
       const b = n - a
+      // If b is negative, use subtraction instead: a + b = a - (-b)
+      if (b < 0) {
+        return `(${numberToExpr(a, depth + 1)}-${numberToExpr(-b, depth + 1)})`
+      }
       return `(${numberToExpr(a, depth + 1)}+${numberToExpr(b, depth + 1)})`
     },
     () => {
@@ -364,6 +399,11 @@ function numberToExpr(n: number, depth: number = 0): string {
     },
     () => {
       if (n === 0) return '(0)'
+      if (n < 0) {
+        // Handle negative: -(abs(n)*a/a)
+        const a = randInt(1, 100)
+        return `(0-${-n}*${a}/${a})`
+      }
       const a = randInt(1, 100)
       return `(${n}*${a}/${a})`
     }
