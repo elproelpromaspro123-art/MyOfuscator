@@ -352,16 +352,21 @@ function wrapControlFlow(code: string, nameGen: NameGenerator): string {
   const states = shuffle([randInt(10000, 99999), randInt(10000, 99999), randInt(10000, 99999), randInt(10000, 99999)])
   const [s1, s2, s3, sEnd] = states
 
+  // Generate dummy code for empty blocks to avoid "then ;" syntax error
+  const dummyVar = nameGen.generate(randInt(9000, 9500))
+  const dummyCode = `local ${dummyVar}=0`
+
   const blocks = shuffle([
-    { st: s1, next: s2, code: '' },
-    { st: s2, next: s3, code },
-    { st: s3, next: sEnd, code: '' },
+    { st: s1, next: s2, code: dummyCode },
+    { st: s2, next: s3, code: code || dummyCode },
+    { st: s3, next: sEnd, code: dummyCode },
   ])
 
-  let result = `local ${stateVar}=${s1};while true do `
+  let result = `local ${stateVar}=${s1} while true do `
   blocks.forEach((b, i) => {
     const prefix = i === 0 ? 'if' : 'elseif'
-    result += `${prefix} ${stateVar}==${b.st} then ${b.code};${stateVar}=${b.next} `
+    const blockCode = b.code || dummyCode
+    result += `${prefix} ${stateVar}==${b.st} then ${blockCode} ${stateVar}=${b.next} `
   })
   result += `elseif ${stateVar}==${sEnd} then break end end`
   
