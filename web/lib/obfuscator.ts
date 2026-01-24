@@ -58,40 +58,95 @@ function randInt(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min
 }
 
-function escapeString(str: string): string {
-  // Use Lua-safe escape sequences that won't cause "Malformed number" errors
-  // The issue: \000 followed by digits (like \0001) is ambiguous in Lua
-  // Solution: Use string.char() concatenation for bytes, or ensure separation
+// ==================== BASE64 ENCODING (SAFE - NO BINARY) ====================
+// This is the key fix - use Base64 for ALL string data like Prometheus does
+// Base64 only contains safe ASCII characters: A-Z, a-z, 0-9, +, /, =
+
+function encodeBase64(str: string): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
   let result = ''
-  for (let i = 0; i < str.length; i++) {
-    const code = str.charCodeAt(i)
-    const nextChar = str[i + 1]
-    const nextIsDigit = nextChar && /\d/.test(nextChar)
-    
-    if (code === 92) { // backslash
-      result += '\\\\'
-    } else if (code === 34) { // double quote
-      result += '\\"'
-    } else if (code === 10) { // newline
-      result += '\\n'
-    } else if (code === 13) { // carriage return
-      result += '\\r'
-    } else if (code === 9) { // tab
-      result += '\\t'
-    } else if (code < 32 || code > 126) {
-      // For non-printable chars: use 3-digit escape, but if next char is a digit,
-      // we need to ensure the escape is unambiguous
-      // Lua reads up to 3 decimal digits after backslash, so \0001 = \000 + "1"
-      // But \1231 could be \123 + "1" or \12 + "31" - ambiguous!
-      // Solution: always use exactly 3 digits
-      const escaped = '\\' + code.toString().padStart(3, '0')
-      result += escaped
-      // If next char is a digit and our code < 100, Lua might misparse
-      // e.g., \01 followed by "2" looks like \012
-      // But with padStart(3,'0'), \001 followed by "2" is unambiguous as \001 + "2"
+  let i = 0
+  
+  // Convert string to bytes (handle UTF-8)
+  const bytes: number[] = []
+  for (let j = 0; j < str.length; j++) {
+    const code = str.charCodeAt(j)
+    if (code < 128) {
+      bytes.push(code)
+    } else if (code < 2048) {
+      bytes.push(192 | (code >> 6))
+      bytes.push(128 | (code & 63))
+    } else if (code < 65536) {
+      bytes.push(224 | (code >> 12))
+      bytes.push(128 | ((code >> 6) & 63))
+      bytes.push(128 | (code & 63))
     } else {
-      result += str[i]
+      bytes.push(240 | (code >> 18))
+      bytes.push(128 | ((code >> 12) & 63))
+      bytes.push(128 | ((code >> 6) & 63))
+      bytes.push(128 | (code & 63))
     }
+  }
+  
+  while (i < bytes.length) {
+    const c1 = bytes[i++]
+    const c2 = i < bytes.length ? bytes[i++] : 0
+    const c3 = i < bytes.length ? bytes[i++] : 0
+    const triplet = (c1 << 16) | (c2 << 8) | c3
+    result += chars[(triplet >> 18) & 0x3F]
+    result += chars[(triplet >> 12) & 0x3F]
+    result += i > bytes.length + 1 ? '=' : chars[(triplet >> 6) & 0x3F]
+    result += i > bytes.length ? '=' : chars[triplet & 0x3F]
+  }
+  return result
+}
+
+// XOR encrypt bytes then Base64 encode - completely safe output
+function xorEncryptBase64(str: string, key: number, seed: number): string {
+  const bytes: number[] = []
+  
+  // Convert to bytes (UTF-8)
+  for (let j = 0; j < str.length; j++) {
+    const code = str.charCodeAt(j)
+    if (code < 128) {
+      bytes.push(code)
+    } else if (code < 2048) {
+      bytes.push(192 | (code >> 6))
+      bytes.push(128 | (code & 63))
+    } else if (code < 65536) {
+      bytes.push(224 | (code >> 12))
+      bytes.push(128 | ((code >> 6) & 63))
+      bytes.push(128 | (code & 63))
+    } else {
+      bytes.push(240 | (code >> 18))
+      bytes.push(128 | ((code >> 12) & 63))
+      bytes.push(128 | ((code >> 6) & 63))
+      bytes.push(128 | (code & 63))
+    }
+  }
+  
+  // XOR encrypt with pseudo-random sequence
+  let state = seed
+  const encrypted: number[] = []
+  for (let i = 0; i < bytes.length; i++) {
+    state = (state * 1103515245 + 12345) & 0x7FFFFFFF
+    const randByte = (state >> 16) & 0xFF
+    encrypted.push((bytes[i] ^ key ^ randByte ^ ((i * 7) & 0xFF)) & 0xFF)
+  }
+  
+  // Base64 encode the encrypted bytes
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+  let result = ''
+  let i = 0
+  while (i < encrypted.length) {
+    const c1 = encrypted[i++]
+    const c2 = i < encrypted.length ? encrypted[i++] : 0
+    const c3 = i < encrypted.length ? encrypted[i++] : 0
+    const triplet = (c1 << 16) | (c2 << 8) | c3
+    result += chars[(triplet >> 18) & 0x3F]
+    result += chars[(triplet >> 12) & 0x3F]
+    result += i > encrypted.length + 1 ? '=' : chars[(triplet >> 6) & 0x3F]
+    result += i > encrypted.length ? '=' : chars[triplet & 0x3F]
   }
   return result
 }
@@ -202,14 +257,33 @@ function tokenize(code: string): Token[] {
       }
     }
 
-    // Quoted string
+    // Quoted string - properly parse escape sequences
     if (code[i] === '"' || code[i] === "'") {
       const quote = code[i]
       let j = i + 1
       let content = ''
       while (j < code.length) {
         if (code[j] === '\\' && j + 1 < code.length) {
-          content += code[j] + code[j + 1]
+          const next = code[j + 1]
+          if (next === 'n') { content += '\n'; j += 2; continue }
+          if (next === 'r') { content += '\r'; j += 2; continue }
+          if (next === 't') { content += '\t'; j += 2; continue }
+          if (next === '\\') { content += '\\'; j += 2; continue }
+          if (next === '"') { content += '"'; j += 2; continue }
+          if (next === "'") { content += "'"; j += 2; continue }
+          if (/\d/.test(next)) {
+            // Numeric escape \ddd
+            let numStr = ''
+            let k = j + 1
+            while (k < code.length && /\d/.test(code[k]) && numStr.length < 3) {
+              numStr += code[k]
+              k++
+            }
+            content += String.fromCharCode(parseInt(numStr, 10))
+            j = k
+            continue
+          }
+          content += code[j + 1]
           j += 2
           continue
         }
@@ -260,151 +334,68 @@ function tokenize(code: string): Token[] {
   return tokens
 }
 
-// ==================== STRING ENCRYPTOR (XOR + Pseudo-Random) ====================
+// ==================== STRING ENCRYPTOR (Base64 + XOR) ====================
 
 class StringEncryptor {
-  private key1: number
-  private key2: number
-  private key3: number
+  private key: number
   private usedSeeds: Set<number> = new Set()
 
   constructor() {
-    this.key1 = randInt(1, 255)
-    this.key2 = randInt(1, 255)
-    this.key3 = randInt(1, 255)
+    this.key = randInt(1, 255)
   }
 
   encrypt(str: string): { data: string; seed: number } {
     let seed: number
     do { seed = randInt(1, 2147483647) } while (this.usedSeeds.has(seed))
     this.usedSeeds.add(seed)
-
-    let state = seed
-    let result = ''
-    for (let i = 0; i < str.length; i++) {
-      state = (state * 1103515245 + 12345) & 0x7FFFFFFF
-      const randByte = (state >> 16) & 0xFF
-      const byte = str.charCodeAt(i)
-      const encrypted = (byte ^ this.key1 ^ randByte ^ ((i * this.key2) & 0xFF)) & 0xFF
-      result += String.fromCharCode(encrypted)
-    }
-    return { data: result, seed }
-  }
-
-  generateDecryptor(varName: string, tableVar: string): string {
-    // Use custom XOR function for Lua 5.1/LuaU compatibility (no ~ operator in older Lua)
-    // This matches Prometheus's approach in EncryptStrings.lua
-    return `local ${varName}=(function()local a={}local b=${this.key1}local c=${this.key2}local function x(p,q)local r=0;local s=1;while p>0 or q>0 do local t=p%2;local u=q%2;if t~=u then r=r+s end;p=math.floor(p/2);q=math.floor(q/2);s=s*2 end;return r end;return function(d,e)if a[e]then return a[e]end;local f=e;local g=""for h=1,#d do f=(f*1103515245+12345)%2147483648;local i=math.floor(f/65536)%256;local j=d:byte(h);local k=x(x(x(j,b),i),(h-1)*c%256)%256;g=g..string.char(k)end;a[e]=g;return g end end)();local ${tableVar}={};`
-  }
-}
-
-// ==================== CONSTANT ARRAY ====================
-
-class ConstantArray {
-  private constants: string[] = []
-  private lookup: Map<string, number> = new Map()
-  private offset: number
-  private base64Chars: string
-
-  constructor() {
-    this.offset = randInt(-9999, 9999)
-    this.base64Chars = shuffle('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'.split('')).join('')
-  }
-
-  add(value: string): number {
-    if (this.lookup.has(value)) {
-      return this.lookup.get(value)!
-    }
-    const idx = this.constants.length + 1
-    this.constants.push(value)
-    this.lookup.set(value, idx)
-    return idx
-  }
-
-  getIndex(value: string): number {
-    return this.lookup.get(value) || this.add(value)
-  }
-
-  private encodeBase64(str: string): string {
-    let result = ''
-    let i = 0
-    while (i < str.length) {
-      const c1 = str.charCodeAt(i++)
-      const c2 = i < str.length ? str.charCodeAt(i++) : 0
-      const c3 = i < str.length ? str.charCodeAt(i++) : 0
-      const triplet = (c1 << 16) | (c2 << 8) | c3
-      result += this.base64Chars[(triplet >> 18) & 0x3F]
-      result += this.base64Chars[(triplet >> 12) & 0x3F]
-      result += i > str.length + 1 ? '=' : this.base64Chars[(triplet >> 6) & 0x3F]
-      result += i > str.length ? '=' : this.base64Chars[triplet & 0x3F]
-    }
-    return result
-  }
-
-  generate(arrVar: string, wrapperVar: string): string {
-    if (this.constants.length === 0) return ''
-
-    const shuffled = shuffle([...this.constants])
-    const newLookup = new Map<string, number>()
-    shuffled.forEach((v, i) => newLookup.set(v, i + 1))
     
-    // Update lookup with new indices
-    this.lookup = newLookup
-
-    const encoded = shuffled.map(s => `"${escapeString(this.encodeBase64(s))}"`)
-    
-    const lookupTable = this.base64Chars.split('').map((c, i) => `["${c}"]=${i}`).join(',')
-
-    let code = `local ${arrVar}={${encoded.join(',')}};`
-    
-    // Add base64 decoder
-    code += `do local a={${lookupTable}};local b=string.len;local c=string.sub;local d=math.floor;local e=string.char;local f=table.insert;local g=table.concat;for h=1,#${arrVar} do local i=${arrVar}[h];local j=b(i);local k={};local l=1;local m=0;local n=0;while l<=j do local o=c(i,l,l);local p=a[o];if p then m=m+p*(64^(3-n));n=n+1;if n==4 then n=0;local q=d(m/65536);local r=d(m%65536/256);local s=m%256;f(k,e(q,r,s));m=0 end elseif o=="="then f(k,e(d(m/65536)));if l>=j or c(i,l+1,l+1)~="="then f(k,e(d(m%65536/256)))end;break end;l=l+1 end;${arrVar}[h]=g(k)end end;`
-
-    // Add wrapper function with offset
-    const offsetExpr = this.offset < 0 ? `a-${-this.offset}` : `a+${this.offset}`
-    code += `local function ${wrapperVar}(a)return ${arrVar}[${offsetExpr}]end;`
-
-    return code
+    // XOR encrypt and Base64 encode - output is safe ASCII only
+    const encrypted = xorEncryptBase64(str, this.key, seed)
+    return { data: encrypted, seed }
   }
 
-  getAccessCode(value: string, wrapperVar: string): string {
-    const idx = this.getIndex(value) - this.offset
-    return `${wrapperVar}(${idx})`
+  // Generate runtime decryptor that decodes Base64 then XOR decrypts
+  generateDecryptor(decryptVar: string, cacheVar: string): string {
+    // Shuffled Base64 lookup for added obfuscation
+    const b64chars = shuffle('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'.split(''))
+    const lookupEntries = b64chars.map((c, i) => {
+      const origIdx = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'.indexOf(c)
+      return `["${c}"]=${origIdx}`
+    }).join(',')
+    
+    // XOR function for Lua 5.1 compatibility (no ~ operator)
+    const xorFunc = `local function X(a,b)local r=0;local s=1;while a>0 or b>0 do if a%2~=b%2 then r=r+s end;a=math.floor(a/2);b=math.floor(b/2);s=s*2 end;return r end`
+    
+    // Base64 decode + XOR decrypt function
+    // This generates safe Lua code with no binary escape sequences
+    return `${xorFunc};local ${cacheVar}={};local ${decryptVar}=(function()local L={${lookupEntries}};local K=${this.key};return function(d,s)if ${cacheVar}[s]then return ${cacheVar}[s]end;local b={};local i=1;local v=0;local n=0;while i<=#d do local c=d:sub(i,i);local p=L[c];if p then v=v+p*(64^(3-n));n=n+1;if n==4 then b[#b+1]=math.floor(v/65536);b[#b+1]=math.floor(v%65536/256);b[#b+1]=v%256;v=0;n=0 end elseif c=="="then b[#b+1]=math.floor(v/65536);if i>=#d or d:sub(i+1,i+1)~="="then b[#b+1]=math.floor(v%65536/256)end;break end;i=i+1 end;local st=s;local o={};for j=1,#b do st=(st*1103515245+12345)%2147483648;local rb=math.floor(st/65536)%256;o[j]=string.char(X(X(X(b[j],K),rb),(j-1)*7%256))end;local r=table.concat(o);${cacheVar}[s]=r;return r end end)();`
   }
 }
 
 // ==================== NUMBERS TO EXPRESSIONS ====================
 
 function numberToExpr(n: number, depth: number = 0): string {
-  if (depth > 3 || Math.random() > 0.6) {
-    // For negative numbers at top level, wrap in parentheses to avoid +-
-    return n < 0 ? `(${n})` : String(n)
+  if (depth > 2 || Math.random() > 0.5) {
+    return n < 0 ? `(0-(${-n}))` : String(n)
   }
   
   const ops = [
     () => {
-      // Use positive values only to avoid +- patterns
-      const a = randInt(1, 10000)
+      const a = randInt(1, 1000)
       const b = n - a
-      // If b is negative, use subtraction instead: a + b = a - (-b)
       if (b < 0) {
-        return `(${numberToExpr(a, depth + 1)}-${numberToExpr(-b, depth + 1)})`
+        return `(${a}-(${-b}))`
       }
-      return `(${numberToExpr(a, depth + 1)}+${numberToExpr(b, depth + 1)})`
+      return `(${a}+${b})`
     },
     () => {
-      const a = randInt(1, 10000)
+      const a = randInt(1, 1000)
       const b = n + a
-      return `(${numberToExpr(b, depth + 1)}-${numberToExpr(a, depth + 1)})`
+      return `(${b}-${a})`
     },
     () => {
       if (n === 0) return '(0)'
-      if (n < 0) {
-        // Handle negative: -(abs(n)*a/a)
-        const a = randInt(1, 100)
-        return `(0-${-n}*${a}/${a})`
-      }
-      const a = randInt(1, 100)
+      const a = randInt(2, 10)
       return `(${n}*${a}/${a})`
     }
   ]
@@ -420,8 +411,8 @@ function generateJunk(count: number, nameGen: NameGenerator): string {
   for (let i = 0; i < count; i++) {
     const v1 = nameGen.generate(randInt(5000, 6000))
     const v2 = nameGen.generate(randInt(6001, 7000))
-    const n1 = randInt(1, 9999)
-    const n2 = randInt(1, 9999)
+    const n1 = randInt(1, 999)
+    const n2 = randInt(1, 999)
 
     const patterns = [
       `local ${v1}=${n1}*0;`,
@@ -443,12 +434,12 @@ function generateJunk(count: number, nameGen: NameGenerator): string {
 function generateAntiTamper(nameGen: NameGenerator): string {
   const v1 = nameGen.generate(randInt(7000, 7500))
   const v2 = nameGen.generate(randInt(7501, 8000))
-  const n1 = randInt(1000, 9999)
-  const n2 = randInt(100, 999)
+  const n1 = randInt(100, 999)
+  const n2 = randInt(10, 99)
   const sum = n1 + n2
   const prod = n1 * n2
 
-  return `local ${v1}=${n1};local ${v2}=${n2};if ${v1}+${v2}~=${sum}or ${v1}*${v2}~=${prod}then return end;if type(string)~="table"or type(math)~="table"or type(table)~="table"then return end;`
+  return `local ${v1}=${n1};local ${v2}=${n2};if ${v1}+${v2}~=${sum} or ${v1}*${v2}~=${prod} then return end;`
 }
 
 // ==================== CONTROL FLOW WRAPPER ====================
@@ -467,9 +458,9 @@ function wrapControlFlow(code: string, nameGen: NameGenerator): string {
   let result = `local ${stateVar}=${s1};while true do `
   blocks.forEach((b, i) => {
     const prefix = i === 0 ? 'if' : 'elseif'
-    result += `${prefix} ${stateVar}==${b.st}then ${b.code};${stateVar}=${b.next} `
+    result += `${prefix} ${stateVar}==${b.st} then ${b.code};${stateVar}=${b.next} `
   })
-  result += `elseif ${stateVar}==${sEnd}then break else break end end`
+  result += `elseif ${stateVar}==${sEnd} then break else break end end`
   
   return result
 }
@@ -485,11 +476,9 @@ function renameVariables(tokens: Token[], nameGen: NameGenerator): Token[] {
     const token = tokens[i]
     
     if (token.type === 'identifier' && token.value === 'local') {
-      // Look for variable name(s)
       let j = i + 1
       while (j < tokens.length && tokens[j].type === 'code') j++
       
-      // Handle function declarations
       if (j < tokens.length && tokens[j].type === 'identifier' && tokens[j].value === 'function') {
         j++
         while (j < tokens.length && tokens[j].type === 'code') j++
@@ -502,7 +491,6 @@ function renameVariables(tokens: Token[], nameGen: NameGenerator): Token[] {
         continue
       }
       
-      // Handle regular variable declarations
       while (j < tokens.length) {
         if (tokens[j].type === 'identifier' && !RESERVED.has(tokens[j].value)) {
           const name = tokens[j].value
@@ -513,17 +501,15 @@ function renameVariables(tokens: Token[], nameGen: NameGenerator): Token[] {
         j++
         while (j < tokens.length && tokens[j].type === 'code') j++
         if (j >= tokens.length || tokens[j].value !== ',') break
-        j++ // skip comma
+        j++
         while (j < tokens.length && tokens[j].type === 'code') j++
       }
     }
     
-    // Handle for loops
     if (token.type === 'identifier' && token.value === 'for') {
       let j = i + 1
       while (j < tokens.length && tokens[j].type === 'code') j++
       
-      // Collect loop variables
       while (j < tokens.length && tokens[j].value !== '=' && tokens[j].value !== 'in' && tokens[j].value !== 'do') {
         if (tokens[j].type === 'identifier' && !RESERVED.has(tokens[j].value)) {
           const name = tokens[j].value
@@ -535,11 +521,10 @@ function renameVariables(tokens: Token[], nameGen: NameGenerator): Token[] {
       }
     }
     
-    // Handle function parameters
     if (token.type === 'identifier' && token.value === 'function') {
       let j = i + 1
       while (j < tokens.length && tokens[j].value !== '(') j++
-      j++ // skip (
+      j++
       
       while (j < tokens.length && tokens[j].value !== ')') {
         if (tokens[j].type === 'identifier' && !RESERVED.has(tokens[j].value) && tokens[j].value !== '...') {
@@ -553,7 +538,6 @@ function renameVariables(tokens: Token[], nameGen: NameGenerator): Token[] {
     }
   }
   
-  // Second pass: rename all occurrences
   return tokens.map(token => {
     if (token.type === 'identifier' && localVars.has(token.value)) {
       return { ...token, value: localVars.get(token.value)! }
@@ -599,7 +583,6 @@ export async function obfuscateCode(code: string): Promise<ObfuscationResult> {
   const originalSize = code.length
   const nameGen = new NameGenerator()
   const encryptor = new StringEncryptor()
-  const constArray = new ConstantArray()
 
   // Tokenize
   let tokens = tokenize(code)
@@ -607,15 +590,13 @@ export async function obfuscateCode(code: string): Promise<ObfuscationResult> {
   // Rename local variables
   tokens = renameVariables(tokens, nameGen)
 
-  // Collect and encrypt strings
+  // Variables for encrypted strings
   const decryptVar = nameGen.generate(randInt(100, 200))
   const cacheVar = nameGen.generate(randInt(201, 300))
-  const arrVar = nameGen.generate(randInt(301, 400))
-  const wrapperVar = nameGen.generate(randInt(401, 500))
   
   const encryptedStrings: Map<string, { data: string; seed: number }> = new Map()
   
-  // Process strings
+  // Process and encrypt all strings
   for (const token of tokens) {
     if ((token.type === 'string' || token.type === 'longstring') && token.rawContent !== undefined) {
       const content = token.rawContent
@@ -625,19 +606,19 @@ export async function obfuscateCode(code: string): Promise<ObfuscationResult> {
     }
   }
 
-  // Build result from tokens, replacing strings
+  // Build result from tokens, replacing strings with decryptor calls
   let processedCode = ''
   for (const token of tokens) {
     if (token.type === 'comment' || token.type === 'longcomment') {
-      continue // Strip comments
+      continue
     }
     
     if ((token.type === 'string' || token.type === 'longstring') && token.rawContent !== undefined) {
       const content = token.rawContent
       if (content.length > 0 && encryptedStrings.has(content)) {
         const enc = encryptedStrings.get(content)!
-        const escaped = escapeString(enc.data)
-        processedCode += `${cacheVar}[${decryptVar}("${escaped}",${enc.seed})]`
+        // Base64 string is safe ASCII - no escape sequences needed
+        processedCode += `${decryptVar}("${enc.data}",${enc.seed})`
       } else if (content.length === 0) {
         processedCode += '""'
       } else {
@@ -648,7 +629,7 @@ export async function obfuscateCode(code: string): Promise<ObfuscationResult> {
 
     if (token.type === 'number') {
       const num = parseFloat(token.value)
-      if (Number.isInteger(num) && Math.abs(num) < 10000 && Math.abs(num) > 10 && Math.random() > 0.5) {
+      if (Number.isInteger(num) && Math.abs(num) < 1000 && Math.abs(num) > 10 && Math.random() > 0.7) {
         processedCode += numberToExpr(num)
       } else {
         processedCode += token.value
@@ -662,7 +643,7 @@ export async function obfuscateCode(code: string): Promise<ObfuscationResult> {
   // Build final code
   let result = ''
 
-  // Add decryptor
+  // Add decryptor (includes XOR function and Base64 decoder)
   result += encryptor.generateDecryptor(decryptVar, cacheVar)
 
   // Add anti-tamper
@@ -677,9 +658,9 @@ export async function obfuscateCode(code: string): Promise<ObfuscationResult> {
   // Wrap in control flow
   result = wrapControlFlow(result, nameGen)
 
-  // Wrap in IIFE (2 layers for executor compatibility)
-  result = `return(function(...)${result}end)(...)`
-  result = `return(function(...)${result}end)(...)`
+  // Wrap in IIFE (double layer for executor compatibility)
+  result = `return(function(...)${result} end)(...)`
+  result = `return(function(...)${result} end)(...)`
 
   // Add outer junk
   const outerJunk = generateJunk(4, nameGen)
