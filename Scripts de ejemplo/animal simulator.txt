@@ -1,0 +1,362 @@
+ocal Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+Rayfield:Notify({
+    Title = "Animal Simulator - Autofarm Loaded!",
+    Content = "Updated Christmas Edition 🎄\nEnjoy auto collecting coins!\nby Correo",
+    Duration = 8,
+    Image = nil,
+})
+local Window = Rayfield:CreateWindow({
+    Name = "Animal Simulator • Autofarm Christmas",
+    LoadingTitle = "Loading Autofarm...",
+    LoadingSubtitle = "Updated Christmas Edition 🎄",
+    ConfigurationSaving = { Enabled = false },
+    KeySystem = false
+})
+local AutofarmTab = Window:CreateTab("Autofarm", nil)
+AutofarmTab:CreateSection("Auto Collect Coins")
+local AutoCoinsToggle = AutofarmTab:CreateToggle({
+    Name = "Auto Collect Coins",
+    CurrentValue = false,
+    Flag = "AutoCoins",
+    Callback = function(Value)
+        _G.AutoCoinsEnabled = Value
+        if Value then Rayfield:Notify({Title = "Activated", Content = "Collecting coins automatically 🎁", Duration = 4})
+        else Rayfield:Notify({Title = "Deactivated", Content = "Stopped", Duration = 4}) end
+    end,
+})
+local function collectCoins()
+    if not _G.AutoCoinsEnabled then return end
+    local char = game.Players.LocalPlayer.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+    local root = char.HumanoidRootPart
+    local container = workspace:FindFirstChild("CoinContainer")
+    if not container then return end
+    for _, coin in ipairs(container:GetChildren()) do
+        if coin.Name == "CoinTemplate" and coin:IsA("Model") then
+            local part = coin:FindFirstChild("Head") or coin.PrimaryPart or coin:FindFirstChildWhichIsA("BasePart")
+            if part and part:IsA("BasePart") then
+                root.CFrame = part.CFrame + Vector3.new(0, 4, 0)
+                firetouchinterest(root, part, 0) task.wait(0.02) firetouchinterest(root, part, 1)
+                task.wait(0.08)
+            end
+        end
+    end
+end
+task.spawn(function()
+    while true do
+        if _G.AutoCoinsEnabled then pcall(collectCoins) end
+        task.wait(0.1)
+    end
+end)
+game.Players.LocalPlayer.CharacterAdded:Connect(function() task.wait(2.5) end)
+AutofarmTab:CreateSection("Autofarm Eggs")
+AutofarmTab:CreateParagraph({Title = "Eggs Instructions", Content = "Manual process to avoid bugs:\n1. Press 'Claim Egg' → TP to chicken nest → Press E\n2. Press 'Incubate Egg' → TP to incubator → Press E\n3. Press 'Farm Green Crystal' → TP to GrassElement (repeat)"})
+AutofarmTab:CreateButton({
+    Name = "Claim Egg",
+    Callback = function()
+        local char = game.Players.LocalPlayer.Character
+        if char and char:FindFirstChild("HumanoidRootPart") then
+            char.HumanoidRootPart.CFrame = CFrame.new(2957, 725, -3615)
+            Rayfield:Notify({Title = "Teleported", Content = "Now at Chicken Nest - PRESS E", Duration = 6})
+        end
+    end,
+})
+AutofarmTab:CreateButton({
+    Name = "Incubate Egg",
+    Callback = function()
+        local char = game.Players.LocalPlayer.Character
+        if char and char:FindFirstChild("HumanoidRootPart") then
+            char.HumanoidRootPart.CFrame = CFrame.new(-182, 643, 452)
+            Rayfield:Notify({Title = "Teleported", Content = "Now at Incubator - PRESS E", Duration = 6})
+        end
+    end,
+})
+AutofarmTab:CreateButton({
+    Name = "Farm Crystal Green",
+    Callback = function()
+        local char = game.Players.LocalPlayer.Character
+        if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+        local root = char.HumanoidRootPart
+        local chickenEvent = workspace:FindFirstChild("ChickenEvent")
+        if not chickenEvent then Rayfield:Notify({Title = "Error", Content = "ChickenEvent not found!", Duration = 5}) return end
+        local folder = chickenEvent:FindFirstChild("Folder")
+        if not folder then return end
+        for _, obj in ipairs(folder:GetChildren()) do
+            if obj.Name == "GrassElement" and obj:IsA("Model") then
+                local part = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
+                if part then
+                    root.CFrame = part.CFrame + Vector3.new(0, 5, 0)
+                    Rayfield:Notify({Title = "Teleported", Content = "At GrassElement - Collect!", Duration = 5})
+                    return
+                end
+            end
+        end
+        Rayfield:Notify({Title = "Error", Content = "No GrassElement found!", Duration = 5})
+    end,
+})
+AutofarmTab:CreateSection("Level 5k Dummies Farm")
+AutofarmTab:CreateToggle({
+    Name = "Auto Farm 5k Dummies (+5k EXP)",
+    CurrentValue = false,
+    Flag = "DummyFarm",
+    Callback = function(Value)
+        _G.DummyFarmEnabled = Value
+        if Value then Rayfield:Notify({Title = "Activated", Content = "Farming 5k dummies automatically", Duration = 5})
+        else Rayfield:Notify({Title = "Deactivated", Content = "Dummy farm stopped", Duration = 5}) end
+    end,
+})
+task.spawn(function()
+    while true do
+        if _G.DummyFarmEnabled then
+            local char = game.Players.LocalPlayer.Character
+            if char and char:FindFirstChild("HumanoidRootPart") then
+                char.HumanoidRootPart.CFrame = CFrame.new(-52, 593, 815)
+                keypress(0x51)
+                task.wait(0.05)
+                keyrelease(0x51)
+            end
+        end
+        task.wait(0.25)
+    end
+end)
+local MissionTab = Window:CreateTab("Christmas Mission", nil)
+MissionTab:CreateSection("Christmas Mission Helper")
+MissionTab:CreateParagraph({Title = "INSTRUCTIONS", Content = "1. Select Toy → TP → Click toy\n2. TP Gift Pickup → Press E\n3. Select House → TP → Deliver\nRepeat 1-50 for 6 Raccoon morphs"})
+local selectedToy = 1
+local selectedHouse = 1
+MissionTab:CreateDropdown({
+    Name = "Select Toy (1-50)",
+    Options = {"1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22","23","24","25","26","27","28","29","30","31","32","33","34","35","36","37","38","39","40","41","42","43","44","45","46","47","48","49","50"},
+    CurrentOption = {"1"},
+    Callback = function(Option) selectedToy = tonumber(Option[1]) end,
+})
+MissionTab:CreateDropdown({
+    Name = "Select House (1-50)",
+    Options = {"1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22","23","24","25","26","27","28","29","30","31","32","33","34","35","36","37","38","39","40","41","42","43","44","45","46","47","48","49","50"},
+    CurrentOption = {"1"},
+    Callback = function(Option) selectedHouse = tonumber(Option[1]) end,
+})
+local function tpToToy()
+    if not selectedToy then Rayfield:Notify({Title = "Error", Content = "Select Toy first!", Duration = 4}) return end
+    local eventFolder = workspace:FindFirstChild("ChristmasEvent(2025)")
+    if not eventFolder then Rayfield:Notify({Title = "Error", Content = "Event folder not found!", Duration = 4}) return end
+    local collectables = eventFolder:FindFirstChild("CollectableToys")
+    if not collectables then return end
+    local toy = collectables:FindFirstChild("Toy" .. selectedToy)
+    if not toy then Rayfield:Notify({Title = "Error", Content = "Toy" .. selectedToy .. " not found!", Duration = 4}) return end
+    local char = game.Players.LocalPlayer.Character
+    if char and char:FindFirstChild("HumanoidRootPart") then
+        char.HumanoidRootPart.CFrame = toy.CFrame + Vector3.new(0, 5, 0)
+        Rayfield:Notify({Title = "TP Success", Content = "At Toy " .. selectedToy .. " - CLICK IT", Duration = 5})
+    end
+end
+local function tpToGift()
+    local char = game.Players.LocalPlayer.Character
+    if char and char:FindFirstChild("HumanoidRootPart") then
+        char.HumanoidRootPart.CFrame = CFrame.new(-11303, 398, 169)
+        Rayfield:Notify({Title = "TP Success", Content = "At Gift Pickup - PRESS E", Duration = 5})
+    end
+end
+local function tpToHouse()
+    if not selectedHouse then Rayfield:Notify({Title = "Error", Content = "Select House first!", Duration = 4}) return end
+    local eventFolder = workspace:FindFirstChild("ChristmasEvent(2025)")
+    if not eventFolder then return end
+    local houses = eventFolder:FindFirstChild("Houses")
+    if not houses then return end
+    local house = houses:FindFirstChild("House" .. selectedHouse)
+    if not house then Rayfield:Notify({Title = "Error", Content = "House" .. selectedHouse .. " not found!", Duration = 4}) return end
+    local char = game.Players.LocalPlayer.Character
+    if char and char:FindFirstChild("HumanoidRootPart") then
+        local door = house:FindFirstChild("Door") or house.PrimaryPart or house:FindFirstChildWhichIsA("BasePart")
+        if door then char.HumanoidRootPart.CFrame = door.CFrame + Vector3.new(0, 3, 0)
+        else char.HumanoidRootPart.CFrame = house:GetPivot() + Vector3.new(0, 5, 0) end
+        Rayfield:Notify({Title = "TP Success", Content = "At House " .. selectedHouse .. " - DELIVER", Duration = 5})
+    end
+end
+MissionTab:CreateButton({Name = "Teleport to Selected Toy", Callback = tpToToy})
+MissionTab:CreateButton({Name = "Teleport to Gift Pickup", Callback = tpToGift})
+MissionTab:CreateButton({Name = "Teleport to Selected House", Callback = tpToHouse})
+local BossesTab = Window:CreateTab("Bosses", nil)
+BossesTab:CreateSection("Teleport to Bosses")
+local bossList = {"BOSSBEAR", "BOSSDEER", "BOSSDINO", "CENTAUR", "CRABBOSS", "DragonGiraffe", "Griffin", "LavaGorilla"}
+local selectedBoss = bossList[1]
+BossesTab:CreateDropdown({
+    Name = "Select Boss",
+    Options = bossList,
+    CurrentOption = {bossList[1]},
+    Callback = function(Option) selectedBoss = Option[1] end,
+})
+BossesTab:CreateButton({
+    Name = "Teleport to Selected Boss",
+    Callback = function()
+        local npcFolder = workspace:FindFirstChild("NPC")
+        if not npcFolder then Rayfield:Notify({Title = "Error", Content = "NPC folder not found!", Duration = 5}) return end
+        local boss = npcFolder:FindFirstChild(selectedBoss)
+        if not boss then Rayfield:Notify({Title = "Error", Content = selectedBoss .. " not found!", Duration = 5}) return end
+        local char = game.Players.LocalPlayer.Character
+        if char and char:FindFirstChild("HumanoidRootPart") then
+            local targetPart = boss.PrimaryPart or boss:FindFirstChildWhichIsA("BasePart")
+            if targetPart then
+                char.HumanoidRootPart.CFrame = targetPart.CFrame + Vector3.new(0, 10, 0)
+                Rayfield:Notify({Title = "Teleported", Content = "Near " .. selectedBoss .. "!", Duration = 5})
+            end
+        end
+    end,
+})
+local ToolsTab = Window:CreateTab("Tools", nil)
+ToolsTab:CreateSection("Movement Tools")
+local NoclipToggle = ToolsTab:CreateToggle({
+    Name = "Noclip",
+    CurrentValue = false,
+    Flag = "Noclip",
+    Callback = function(Value)
+        _G.NoclipEnabled = Value
+        if Value then Rayfield:Notify({Title = "Activated", Content = "Noclip ON", Duration = 4})
+        else Rayfield:Notify({Title = "Deactivated", Content = "Noclip OFF", Duration = 4}) end
+    end,
+})
+task.spawn(function()
+    while true do
+        if _G.NoclipEnabled then
+            local char = game.Players.LocalPlayer.Character
+            if char then for _, part in ipairs(char:GetDescendants()) do if part:IsA("BasePart") then part.CanCollide = false end end end
+        end
+        task.wait()
+    end
+end)
+local PvPToolsTab = Window:CreateTab("PVP Tools", nil)
+PvPToolsTab:CreateSection("Hitbox Expander & Combat")
+PvPToolsTab:CreateParagraph({Title = "Hitbox Expander", Content = "Expands existing HumanoidRootPart.\nSeparate toggles for Players and Bosses.\nAnti-sink/fall through floor.\nPerfect restore on disable."})
+local PlayerSizeSlider = PvPToolsTab:CreateSlider({
+    Name = "Player HRP Size (10-60)",
+    Range = {10, 60},
+    Increment = 1,
+    CurrentValue = 30,
+    Flag = "PlayerHRPSize",
+    Callback = function(Value) _G.PlayerHRPSize = Value end,
+})
+local BossSizeSlider = PvPToolsTab:CreateSlider({
+    Name = "Boss HRP Size (10-120)",
+    Range = {10, 120},
+    Increment = 1,
+    CurrentValue = 50,
+    Flag = "BossHRPSize",
+    Callback = function(Value) _G.BossHRPSize = Value end,
+})
+local TransparencySlider = PvPToolsTab:CreateSlider({
+    Name = "HRP Transparency (0-1)",
+    Range = {0, 1},
+    Increment = 0.1,
+    CurrentValue = 0.7,
+    Flag = "HRPTransparency",
+    Callback = function(Value) _G.HRPTransparency = Value end,
+})
+local PlayerHitboxToggle = PvPToolsTab:CreateToggle({
+    Name = "Hitbox Expander - Players Only",
+    CurrentValue = false,
+    Flag = "PlayerHitbox",
+    Callback = function(Value)
+        _G.PlayerHitboxEnabled = Value
+        if Value then Rayfield:Notify({Title = "Activated", Content = "Player HRP expanded (Q damage enabled)", Duration = 5})
+        else Rayfield:Notify({Title = "Deactivated", Content = "Player HRP restored", Duration = 5}) end
+    end,
+})
+local BossHitboxToggle = PvPToolsTab:CreateToggle({
+    Name = "Hitbox Expander - Bosses Only",
+    CurrentValue = false,
+    Flag = "BossHitbox",
+    Callback = function(Value)
+        _G.BossHitboxEnabled = Value
+        if Value then Rayfield:Notify({Title = "Activated", Content = "Boss HRP expanded (Q damage enabled)", Duration = 5})
+        else Rayfield:Notify({Title = "Deactivated", Content = "Boss HRP restored", Duration = 5}) end
+    end,
+})
+_G.PlayerHRPSize = 30
+_G.BossHRPSize = 50
+_G.HRPTransparency = 0.7
+_G.OriginalHRPData = {}  -- { [hrp] = {originalSize, originalTransparency, originalCanCollide} }
+-- Anti-sink/fall through floor: Guardar originales y restaurar al desactivar
+game:GetService("RunService").RenderStepped:Connect(function()
+    -- Players
+    if _G.PlayerHitboxEnabled then
+        for _, player in ipairs(game.Players:GetPlayers()) do
+            if player ~= game.Players.LocalPlayer and player.Character then
+                local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+                if hrp and hrp:IsA("BasePart") then
+                    if not _G.OriginalHRPData[hrp] then
+                        _G.OriginalHRPData[hrp] = {
+                            Size = hrp.Size,
+                            Transparency = hrp.Transparency,
+                            CanCollide = hrp.CanCollide
+                        }
+                    end
+                    hrp.Size = Vector3.new(_G.PlayerHRPSize, _G.PlayerHRPSize, _G.PlayerHRPSize)
+                    hrp.Transparency = _G.HRPTransparency
+                    hrp.CanCollide = false  -- Evita empujones y hundimiento parcial
+                end
+            end
+        end
+    end
+    -- Bosses
+    if _G.BossHitboxEnabled then
+        local npcFolder = workspace:FindFirstChild("NPC")
+        if npcFolder then
+            for _, boss in ipairs(npcFolder:GetChildren()) do
+                local hrp = boss:FindFirstChild("HumanoidRootPart")
+                if hrp and hrp:IsA("BasePart") then
+                    if not _G.OriginalHRPData[hrp] then
+                        _G.OriginalHRPData[hrp] = {
+                            Size = hrp.Size,
+                            Transparency = hrp.Transparency,
+                            CanCollide = hrp.CanCollide
+                        }
+                    end
+                    hrp.Size = Vector3.new(_G.BossHRPSize, _G.BossHRPSize, _G.BossHRPSize)
+                    hrp.Transparency = _G.HRPTransparency
+                    hrp.CanCollide = false
+                end
+            end
+        end
+    end
+end)
+-- Restauración completa al desactivar toggles
+local function restoreHRP()
+    for hrp, original in pairs(_G.OriginalHRPData) do
+        if hrp and hrp.Parent and hrp:IsA("BasePart") then
+            hrp.Size = original.Size
+            hrp.Transparency = original.Transparency
+            hrp.CanCollide = original.CanCollide
+        end
+    end
+    _G.OriginalHRPData = {}
+end
+PlayerHitboxToggle.Callback = function(Value)
+    _G.PlayerHitboxEnabled = Value
+    if not Value then restoreHRP() end
+end
+BossHitboxToggle.Callback = function(Value)
+    _G.BossHitboxEnabled = Value
+    if not Value then restoreHRP() end
+end
+-- Limpieza al respawn
+game.Players.LocalPlayer.CharacterAdded:Connect(restoreHRP)
+PvPToolsTab:CreateToggle({
+    Name = "Auto Q Spam",
+    CurrentValue = false,
+    Flag = "AutoQ",
+    Callback = function(Value)
+        _G.AutoQEnabled = Value
+        if Value then Rayfield:Notify({Title = "Activated", Content = "Auto spamming Q", Duration = 4})
+        else Rayfield:Notify({Title = "Deactivated", Content = "Auto Q stopped", Duration = 4}) end
+    end,
+})
+task.spawn(function()
+    while true do
+        if _G.AutoQEnabled then
+            keypress(0x51)
+            task.wait(0.05)
+            keyrelease(0x51)
+        end
+        task.wait(0.2)
+    end
+end)

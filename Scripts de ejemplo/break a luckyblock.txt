@@ -1,0 +1,341 @@
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+   Name = "Break a Lucky Block | BETA V4.3",
+   LoadingTitle = "System Initializing...",
+   LoadingSubtitle = "by Correo",
+   ConfigurationSaving = {Enabled = false},
+   KeySystem = false
+})
+
+local MainTab = Window:CreateTab("Main", nil)
+local LuckyBlocksFolder = workspace:WaitForChild("LuckyBlocks", 10)
+local player = game.Players.LocalPlayer
+local vim = game:GetService("VirtualInputManager")
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+local ProximityPromptService = game:GetService("ProximityPromptService")
+
+local blockTypes = {}
+local selectedType = "All (Random)"
+local farming = false
+local noclipConn = nil
+local safetyPart = nil
+local floorConn = nil
+local panicKey = Enum.KeyCode.P
+
+local lastPos = Vector3.new(0,0,0)
+local stuckTick = 0
+local maxStuckTime = 12 
+local stuckEnabled = true
+local forceReset = false
+
+task.spawn(function()
+    while true do
+        if LuckyBlocksFolder then
+            pcall(function()
+                for _, v in ipairs(LuckyBlocksFolder:GetChildren()) do
+                    if v:IsA("Model") and not blockTypes[v.Name] then
+                        blockTypes[v.Name] = true
+                    end
+                end
+            end)
+        end
+        task.wait(5)
+    end
+end)
+
+local function clearPhysics()
+    farming = false
+    forceReset = false
+    if floorConn then floorConn:Disconnect() floorConn = nil end
+    if safetyPart then pcall(function() safetyPart:Destroy() end) safetyPart = nil end
+    if noclipConn then noclipConn:Disconnect() noclipConn = nil end
+    
+    local char = player.Character
+    if char then
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if root then
+            for _, v in ipairs(root:GetChildren()) do
+                if v:IsA("BodyVelocity") or v:IsA("BodyGyro") or v:IsA("BodyPosition") then v:Destroy() end
+            end
+        end
+        for _, p in ipairs(char:GetDescendants()) do
+            if p:IsA("BasePart") then pcall(function() p.CanCollide = true end) end
+        end
+    end
+end
+
+local function stopAll()
+    clearPhysics()
+    Rayfield:Notify({Title = "Emergency Stop", Content = "Process terminated by user.", Duration = 3})
+    if _G.MainToggle then _G.MainToggle:Set(false) end
+end
+
+UIS.InputBegan:Connect(function(i, p)
+    if not p and i.KeyCode == panicKey then stopAll() end
+end)
+
+local function createFloor()
+    if safetyPart then pcall(function() safetyPart:Destroy() end) end
+    if floorConn then floorConn:Disconnect() end
+    
+    safetyPart = Instance.new("Part")
+    safetyPart.Size = Vector3.new(35, 1, 35)
+    safetyPart.Anchored = true
+    safetyPart.Transparency = 1
+    safetyPart.CanCollide = true
+    safetyPart.Parent = workspace
+
+    floorConn = RunService.Heartbeat:Connect(function()
+        local char = player.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        if root and safetyPart and farming then
+            safetyPart.CFrame = CFrame.new(root.Position.X, root.Position.Y - 3.5, root.Position.Z)
+            root.Velocity = Vector3.new(root.Velocity.X, 0, root.Velocity.Z)
+        end
+    end)
+end
+
+local function setNoclip(state)
+    if noclipConn then noclipConn:Disconnect() noclipConn = nil end
+    if state then
+        noclipConn = RunService.Stepped:Connect(function()
+            local char = player.Character
+            if char and farming then
+                for _, p in ipairs(char:GetDescendants()) do
+                    if p:IsA("BasePart") then pcall(function() p.CanCollide = false end) end
+                end
+            end
+        end)
+    end
+end
+
+local function moveUnderground(targetPos)
+    local char = player.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not hum or not root or not farming then return end
+
+    local dest = Vector3.new(targetPos.X, targetPos.Y - 15, targetPos.Z)
+    setNoclip(true)
+    
+    local start = tick()
+    while farming and not forceReset and (root.Position - dest).Magnitude > 6 and tick() - start < 20 do
+        hum:MoveTo(dest)
+        task.wait(0.1)
+    end
+end
+
+local function checkHealth(m)
+    if not m or not m.Parent then return 0 end
+    local s, r = pcall(function()
+        local hb = m:FindFirstChild("Hitbox")
+        local gui = hb and hb:FindFirstChild("InfoGui2")
+        local disp = gui and gui:FindFirstChild("DisplayHP")
+        local f = disp and disp:FindFirstChild("Frame")
+        local label = (f and f:IsA("TextLabel")) and f or (disp and disp:IsA("TextLabel") and disp)
+        if label then return tonumber(label.Text:match("%d+")) or 0 end
+        return 100
+    end)
+    return s and r or 0
+end
+
+local function equipGear()
+    local char = player.Character
+    if not char then return end
+    local tool = char:FindFirstChildOfClass("Tool")
+    local valid = false
+    if tool then
+        if tool:FindFirstChild("Pickaxe") and tool:FindFirstChild("Pickaxe"):IsA("LocalScript") then
+            valid = true
+        end
+    end
+    if not valid then
+        vim:SendKeyEvent(true, "One", false, game)
+        task.wait(0.1)
+        vim:SendKeyEvent(false, "One", false, game)
+        task.wait(0.5)
+    end
+end
+
+local isBusy = false
+local function handleCollection()
+    local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not root or isBusy then return end
+
+    isBusy = true
+    root.CFrame = CFrame.new(root.Position.X, root.Position.Y + 6, root.Position.Z)
+    
+    task.wait(2.0)
+    
+    vim:SendKeyEvent(true, "E", false, game)
+    local timer = tick()
+    while farming and (tick() - timer < 2.0) do
+        pcall(function()
+            for _, p in ipairs(ProximityPromptService:GetDescendants()) do
+                if p:IsA("ProximityPrompt") then
+                    local parent = p.Parent
+                    if parent then
+                        local pos = parent:IsA("Model") and parent:GetPivot().Position or parent.Position
+                        if (pos - root.Position).Magnitude < 60 then
+                            fireproximityprompt(p)
+                        end
+                    end
+                end
+            end
+        end)
+        task.wait(0.3)
+    end
+    vim:SendKeyEvent(false, "E", false, game)
+    
+    if farming then
+        root.CFrame = CFrame.new(root.Position.X, root.Position.Y - 6, root.Position.Z)
+    end
+    isBusy = false
+end
+
+task.spawn(function()
+    while true do
+        if farming and stuckEnabled then
+            local char = player.Character
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            if root then
+                local d = (root.Position - lastPos).Magnitude
+                if d < 2 then stuckTick = stuckTick + 1 else stuckTick = 0 end
+                lastPos = root.Position
+                if stuckTick >= maxStuckTime then
+                    stuckTick = 0
+                    forceReset = true 
+                    Rayfield:Notify({Title = "Anti-Stuck", Content = "Resetting cycle...", Duration = 3})
+                    local hum = char:FindFirstChildOfClass("Humanoid")
+                    if hum then hum.Jump = true end
+                end
+            end
+        end
+        task.wait(1)
+    end
+end)
+
+local function mainLoop()
+    local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+
+    local bv = Instance.new("BodyVelocity")
+    bv.Velocity = Vector3.new(0, 0, 0)
+    bv.MaxForce = Vector3.new(0, math.huge, 0)
+    bv.Parent = root
+
+    setNoclip(true)
+    root.CFrame = root.CFrame * CFrame.new(0, -15, 0)
+    createFloor()
+    task.wait(0.5)
+
+    while farming do
+        forceReset = false
+        if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then task.wait(1) continue end
+        
+        local target = nil
+        local blocks = LuckyBlocksFolder:GetChildren()
+        
+        for _, m in ipairs(blocks) do
+            if m:IsA("Model") and m.Parent and (selectedType == "All (Random)" or m.Name == selectedType) then
+                target = m
+                break
+            end
+        end
+
+        if not target then
+            moveUnderground(Vector3.new(-161, 11, -153))
+            task.wait(1)
+            continue
+        end
+
+        moveUnderground(target:GetPivot().Position)
+        if forceReset then continue end
+        
+        equipGear()
+
+        local hb = target:FindFirstChild("Hitbox")
+        if hb then hb.Size = Vector3.new(35, 35, 35) hb.CanCollide = false end
+
+        local mS = tick()
+        while farming and not forceReset and target and target.Parent and checkHealth(target) > 0 and (tick() - mS < 35) do
+            vim:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+            task.wait(0.05)
+            vim:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+            task.wait(0.05)
+        end
+        
+        if forceReset then continue end
+        
+        if farming then
+            task.wait(0.2)
+            handleCollection()
+        end
+
+        if farming then
+            moveUnderground(Vector3.new(-161, 11, -153))
+            task.wait(0.3)
+        end
+    end
+end
+
+local opts = {"All (Random)"}
+for n in pairs(blockTypes) do table.insert(opts, n) end
+
+MainTab:CreateDropdown({
+   Name = "Target Lucky Block",
+   Options = opts,
+   CurrentOption = {"All (Random)"},
+   Callback = function(o) selectedType = (typeof(o) == "table") and o[1] or o end,
+})
+
+_G.MainToggle = MainTab:CreateToggle({
+   Name = "Start Subterranean AutoFarm",
+   CurrentValue = false,
+   Callback = function(v)
+      if v then farming = true task.spawn(mainLoop) else clearPhysics() end
+   end,
+})
+
+MainTab:CreateSection("Anti-Stuck Configuration")
+
+MainTab:CreateKeybind({
+   Name = "Panic Key Bind",
+   CurrentKeybind = "P",
+   HoldToInteract = false,
+   Flag = "pkb",
+   Callback = function(k) 
+       if typeof(k) == "EnumItem" then panicKey = k
+       elseif typeof(k) == "string" then panicKey = Enum.KeyCode[k] end
+   end,
+})
+
+MainTab:CreateToggle({
+   Name = "Enable Stuck Detector",
+   CurrentValue = true,
+   Callback = function(v) stuckEnabled = v end,
+})
+
+MainTab:CreateSlider({
+   Name = "Stuck Timeout",
+   Range = {5, 60},
+   Increment = 1,
+   Suffix = "s",
+   CurrentValue = 12,
+   Callback = function(v) maxStuckTime = v end,
+})
+
+MainTab:CreateSection("Teleports")
+MainTab:CreateButton({ Name = "Tp to Sell", Callback = function() if player.Character then player.Character.HumanoidRootPart.CFrame = CFrame.new(-227, 11, -133) end end })
+MainTab:CreateButton({ Name = "Tp to Buy Equipment", Callback = function() if player.Character then player.Character.HumanoidRootPart.CFrame = CFrame.new(-92, 11, -138) end end })
+MainTab:CreateButton({ Name = "Tp to Buy Pickaxe", Callback = function() if player.Character then player.Character.HumanoidRootPart.CFrame = CFrame.new(-80, 11, -136) end end })
+MainTab:CreateButton({ Name = "Tp to Trader", Callback = function() if player.Character then player.Character.HumanoidRootPart.CFrame = CFrame.new(56, 11, -134) end end })
+MainTab:CreateButton({ Name = "Tp to Machine Fuse", Callback = function() if player.Character then player.Character.HumanoidRootPart.CFrame = CFrame.new(58, 11, -147) end end })
+
+player.CharacterAdded:Connect(function()
+   if farming then task.wait(3) task.spawn(mainLoop) end
+end)

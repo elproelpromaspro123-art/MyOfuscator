@@ -1,0 +1,145 @@
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local Window = Fluent:CreateWindow({
+    Title = "Master Sensei HUB",
+    SubTitle = "Universal Script Hub",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(580, 460),
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.LeftControl
+})
+local Tab = Window:AddTab({ Title = "Home", Icon = "home" })
+Tab:AddParagraph({
+    Title = "Welcome to Master Sensei Hub",
+    Content = "This hub supports multiple games with a single key system.\n\nSupported Games:\n• SCP Roleplay (DOES NOT WORK ON MOBILE / iOS)\n• Uma Racing\n• Blade Ball\n• Break a Lucky Block\n• Animal Simulator\n• Scary Shawarma Kiosk the ANOMALY\n\nThe benefit of using this HUB is that the key you get is not just for one game, but for all supported games in this GUI.\n\nKey lasts 12 hours - save it well!\nIf it crashes on first try, re-execute the script."
+})
+Tab:AddButton({
+    Title = "Get Key",
+    Description = "Copy the link to generate your key",
+    Callback = function()
+        setclipboard("https://work.ink/2e7s/key-system-hub")
+        Fluent:Notify({
+            Title = "Link Copied",
+            Content = "Paste in browser and complete the task to get your key!",
+            Duration = 6
+        })
+    end
+})
+local KeyInput = Tab:AddInput("KeyInput", {
+    Title = "Enter Your Key",
+    Placeholder = "Paste key here...",
+    Default = "",
+    ClearTextOnFocus = false
+})
+Tab:AddButton({
+    Title = "Verify & Load",
+    Description = "Check key and load the game script",
+    Callback = function()
+        local key = KeyInput.Value
+       
+        if key == "" or #key < 10 then
+            Fluent:Notify({
+                Title = "Error",
+                Content = "Invalid key format. Copy the full key.",
+                Duration = 5
+            })
+            return
+        end
+       
+        Fluent:Notify({
+            Title = "Verifying...",
+            Content = "Checking key on work.ink (5-10 seconds)...",
+            Duration = 8
+        })
+       
+        local apiUrl = "https://work.ink/_api/v2/token/isValid/" .. key
+       
+        local success, response = pcall(function()
+            return game:HttpGet(apiUrl, true)
+        end)
+       
+        if not success then
+            Fluent:Notify({
+                Title = "Connection Failed",
+                Content = "Cannot reach work.ink. Check internet or try again.",
+                Duration = 8
+            })
+            return
+        end
+       
+        if response == "" or response:find("error") then
+            Fluent:Notify({
+                Title = "Server Error",
+                Content = "Invalid response from server. Try again later.",
+                Duration = 6
+            })
+            return
+        end
+       
+        local HttpService = game:GetService("HttpService")
+        local decodeSuccess, data = pcall(function()
+            return HttpService:JSONDecode(response)
+        end)
+       
+        if not decodeSuccess then
+            Fluent:Notify({
+                Title = "Invalid Response",
+                Content = "Could not parse key response. Wrong key or server issue.",
+                Duration = 6
+            })
+            return
+        end
+       
+        if data.valid == true then
+            Fluent:Notify({
+                Title = "Success",
+                Content = "Key valid! Loading game script...",
+                Duration = 5
+            })
+           
+            task.wait(1)
+            Window:Destroy()
+           
+            local placeId = game.PlaceId
+            local scriptUrl
+           
+            if placeId == 5041144419 then
+                scriptUrl = "https://gist.githubusercontent.com/elproelpromaspro123-art/fbb75c1a796d9e6a132f94ad10405bc2/raw/51f00d78e8c4c938750db0036f8d6a91eae0d7bf/gistfile1.txt"
+            elseif placeId == 94101948530988 then
+                scriptUrl = "https://gist.githubusercontent.com/elproelpromaspro123-art/9df1eb812e7171795807b0cf5a52e719/raw/6618534e0680ecce9a1e1517651c6b64f64c21a7/gistfile1.txt"
+            elseif placeId == 13772394625 then
+                scriptUrl = "https://gist.githubusercontent.com/elproelpromaspro123-art/e1ab0c7587956a7c62f80d5364732720/raw/0da1c23fc617523b4068a51d1a4a1b836789bd46/gistfile1.txt"
+            elseif placeId == 124311897657957 then
+                scriptUrl = "https://gist.githubusercontent.com/elproelpromaspro123-art/660d469d6b59e9203d285305b6dda424/raw/c4ff5085f58ced0a2d1d29a62ed096a1c9463152/gistfile1.txt"
+            elseif placeId == 5712833750 then
+                scriptUrl = "https://gist.githubusercontent.com/elproelpromaspro123-art/2f9ca56e677bdb768a6785b702227abd/raw/c0b765561f5416f0d30934da581b03dc6e1204d6/gistfile1.txt"
+            elseif placeId == 137826330724902 then
+                scriptUrl = "https://gist.githubusercontent.com/elproelpromaspro123-art/384fd52a72540d48047f56608a2bd16d/raw/05b95fb471d2f2151207fcffaf100837ea030be7/gistfile1.txt"
+            else
+                Fluent:Notify({
+                    Title = "Game Not Supported",
+                    Content = "Current game is not in the supported list. No script loaded.",
+                    Duration = 10
+                })
+                return
+            end
+           
+            local loadSuccess, loadErr = pcall(function()
+                loadstring(game:HttpGet(scriptUrl, true))()
+            end)
+           
+            if not loadSuccess then
+                warn("Failed to load game script: " .. tostring(loadErr))
+            end
+        else
+            Fluent:Notify({
+                Title = "Invalid Key",
+                Content = "Key is invalid, expired, or already used. Get a new one.",
+                Duration = 8
+            })
+        end
+    end
+})
+Tab:AddParagraph({
+    Title = "Protected Access",
+    Content = "Secured by work.ink • One key for all supported games"
+})

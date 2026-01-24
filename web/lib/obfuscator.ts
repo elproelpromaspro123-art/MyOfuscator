@@ -23,22 +23,13 @@ export interface ProtectionStats {
   referencesHidden: number
 }
 
-export interface ObfuscationOptions {
-  mbaLevel: number // 0-5
-  controlFlowDensity: number // 0-1
-  stringEncryptionLayers: number // 1-4
-  opaquePredicateDensity: number // 0-1
-  junkCodeDensity: number // 0-1
-  referenceHiding: boolean
-  antiTamper: boolean
-}
-
-const defaultOptions: ObfuscationOptions = {
-  mbaLevel: 3,
-  controlFlowDensity: 0.8,
-  stringEncryptionLayers: 4,
-  opaquePredicateDensity: 0.5,
-  junkCodeDensity: 0.3,
+// Fixed "Best" profile - optimal security + compatibility balance
+const BEST_PROFILE = {
+  mbaLevel: 3,              // Not too aggressive for compatibility
+  controlFlowDensity: 0.7,  // Good protection without breaking complex scripts
+  stringEncryptionLayers: 3, // 4 can be heavy for loadstring patterns
+  opaquePredicateDensity: 0.4,
+  junkCodeDensity: 0.25,
   referenceHiding: true,
   antiTamper: true,
 }
@@ -888,11 +879,8 @@ function minify(code: string): string {
 
 // ==================== MAIN OBFUSCATION PIPELINE ====================
 
-export async function obfuscateCode(
-  code: string, 
-  options: Partial<ObfuscationOptions> = {}
-): Promise<ObfuscationResult> {
-  const opts = { ...defaultOptions, ...options }
+export async function obfuscateCode(code: string): Promise<ObfuscationResult> {
+  const opts = BEST_PROFILE
   const originalSize = code.length
   const nameGen = new NameGenerator()
   const encryptor = new MultiLayerStringEncryptor(opts.stringEncryptionLayers)
@@ -1054,5 +1042,4 @@ export async function obfuscateCode(
   }
 }
 
-// Export default options
-export { defaultOptions }
+

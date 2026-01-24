@@ -1,0 +1,776 @@
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+   Name = "SCP:RP Ultimate | ESP + Hitbox + Crosshair",
+   LoadingTitle = "SCP:RP Ultimate",
+   LoadingSubtitle = "by me",
+   Theme = "Ocean",
+   ConfigurationSaving = { Enabled = false },
+   KeySystem = false,
+})
+
+local ESPTab = Window:CreateTab("ESP", 4483362458)
+local HitboxTab = Window:CreateTab("Hitbox", 4483362458)
+local CrosshairTab = Window:CreateTab("Crosshair", 4483362458)
+local MiscTab = Window:CreateTab("Miscellaneous", 4483362458)
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Camera = workspace.CurrentCamera
+local Lighting = game:GetService("Lighting")
+local TeleportService = game:GetService("TeleportService")
+local LocalPlayer = Players.LocalPlayer
+
+local ESPSettings = {
+   Enabled = false,
+   HealthBars = false,
+   Tracers = false,
+   Names = false,
+   Distance = false,
+   TeamNames = false,
+   Rainbow = false,
+   ImprovedVisuals = true,
+   OnlyMyTeam = false,
+}
+
+local HitboxSettings = {
+   Enabled = false,
+   SizeMultiplier = 6,
+   VisualTransparency = 0.68,
+   VisualColor = Color3.fromRGB(255, 60, 60),
+   Shape = Enum.PartType.Ball
+}
+
+local CrosshairSettings = {
+   Enabled = false,
+   Size = 12,
+   Thickness = 1,
+   Color = Color3.fromRGB(255, 80, 80),
+   Transparency = 1,
+   Outline = true,
+   OutlineColor = Color3.fromRGB(0, 0, 0),
+   OutlineThickness = 1.5,
+}
+
+local MiscSettings = {
+   Fullbright = false,
+   AntiAFK = false,
+   AntiModerator = false
+}
+
+local ESP_Objects = {}
+local HitboxVisuals = setmetatable({}, {__mode = "k"})
+local Connections = {}
+local Crosshairs = {}
+
+-- Solo un crosshair: círculo relleno simple
+local dotCrosshair = {
+   Center = Drawing.new("Circle")
+}
+
+local function UpdateCrosshairVisibility(visible)
+   dotCrosshair.Center.Visible = visible
+end
+
+local STAFF_USERIDS = {
+   38152945, 342983833, 888493, 2607536459, 487753150, 196079740,
+   124271015, 999399016, 585910694, 89536296, 362684820, 1231547865,
+   938606828, 2481338650, 3593562324, 1469128513, 470692996, 527396508,
+   447043949, 409676514, 1672865097, 224151220, 1272545109, 495734376,
+   934666178, 954992466, 289984168, 1490009898, 1733286024, 155010418,
+   90174430, 914556394, 2723679401, 106374588, 607285772
+}
+
+local function isStaff(userId)
+   for _, id in ipairs(STAFF_USERIDS) do
+      if userId == id then return true end
+   end
+   return false
+end
+
+local function getTeamColor(teamName)
+   local TEAM_COLORS = {
+      ["Administrative Department"] = Color3.fromRGB(200, 200, 255),
+      ["Chaos Insurgency"] = Color3.fromRGB(220, 20, 60),
+      ["Class - D"] = Color3.fromRGB(255, 170, 0),
+      ["Intelligence Agency"] = Color3.fromRGB(100, 255, 200),
+      ["Internal Security Department"] = Color3.fromRGB(180, 100, 255),
+      ["Medical Department"] = Color3.fromRGB(0, 200, 255),
+      ["Mobile Task Force"] = Color3.fromRGB(0, 100, 255),
+      ["Rapid Response Team"] = Color3.fromRGB(50, 150, 255),
+      ["Scientific Department"] = Color3.fromRGB(220, 220, 100),
+      ["Security Department"] = Color3.fromRGB(0, 170, 255)
+   }
+   return TEAM_COLORS[teamName] or Color3.fromRGB(200, 200, 200)
+end
+
+local function getPlayerTeam(player)
+   if not player or not player.Character then return "Unknown" end
+   local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+   if not humanoid then return "Unknown" end
+   return humanoid:GetAttribute("Team") or player.Team and player.Team.Name or "Unknown"
+end
+
+local function isValidTarget(target)
+   if not target or not target.Parent then return false end
+   local hum = target.Parent:FindFirstChildOfClass("Humanoid")
+   if not hum or hum.Health <= 0 then return false end
+   local root = target.Parent:FindFirstChild("HumanoidRootPart")
+   if not root then return false end
+   if target.Parent:IsA("Model") and target.Parent:FindFirstChild("Humanoid") then
+      return true
+   end
+   return false
+end
+
+local function createESP(player)
+   if ESP_Objects[player] then return end
+   local drawings = {
+      Box = Drawing.new("Square"),
+      BoxOutline = Drawing.new("Square"),
+      Tracer = Drawing.new("Line"),
+      Name = Drawing.new("Text"),
+      Distance = Drawing.new("Text"),
+      Team = Drawing.new("Text"),
+      HealthOuter = Drawing.new("Line"),
+      HealthInner = Drawing.new("Line")
+   }
+   drawings.Box.Thickness = 1.4
+   drawings.Box.Filled = false
+   drawings.Box.Transparency = 0.88
+   drawings.BoxOutline.Thickness = 2.8
+   drawings.BoxOutline.Filled = false
+   drawings.BoxOutline.Transparency = 0.65
+   drawings.BoxOutline.Color = Color3.fromRGB(0,0,0)
+   drawings.Tracer.Thickness = 1.5
+   drawings.Tracer.Transparency = 0.82
+   drawings.Name.Size = 15
+   drawings.Name.Center = true
+   drawings.Name.Outline = true
+   drawings.Name.OutlineColor = Color3.fromRGB(0,0,0)
+   drawings.Name.Font = Drawing.Fonts.UI
+   drawings.Distance.Size = 13
+   drawings.Distance.Center = true
+   drawings.Distance.Outline = true
+   drawings.Distance.OutlineColor = Color3.fromRGB(0,0,0)
+   drawings.Team.Size = 13
+   drawings.Team.Center = true
+   drawings.Team.Outline = true
+   drawings.Team.OutlineColor = Color3.fromRGB(0,0,0)
+   drawings.HealthOuter.Thickness = 4
+   drawings.HealthOuter.Color = Color3.fromRGB(20,20,20)
+   drawings.HealthOuter.Transparency = 0.7
+   drawings.HealthInner.Thickness = 2.6
+   drawings.HealthInner.Transparency = 0.92
+   ESP_Objects[player] = drawings
+end
+
+local function updateVisuals()
+   if not LocalPlayer.Character then return end
+   local myTeam = getPlayerTeam(LocalPlayer)
+   for player, drawings in pairs(ESP_Objects) do
+      local char = player.Character
+      if not char or not char:FindFirstChild("HumanoidRootPart") or not isValidTarget(char:FindFirstChild("HumanoidRootPart")) then
+         for _, obj in pairs(drawings) do obj.Visible = false end
+         continue
+      end
+      if ESPSettings.OnlyMyTeam and getPlayerTeam(player) ~= myTeam then
+         for _, obj in pairs(drawings) do obj.Visible = false end
+         continue
+      end
+      local root = char.HumanoidRootPart
+      local hum = char:FindFirstChildOfClass("Humanoid")
+      if not hum then continue end
+      local headPos, onScreen = Camera:WorldToViewportPoint(root.Position + Vector3.new(0, 3, 0))
+      local legPos = Camera:WorldToViewportPoint(root.Position + Vector3.new(0, -4, 0))
+      local rootPos2D = Camera:WorldToViewportPoint(root.Position)
+      if not onScreen then
+         for _, obj in pairs(drawings) do obj.Visible = false end
+         continue
+      end
+      local sizeY = math.clamp(math.abs(headPos.Y - legPos.Y), 22, 220)
+      local sizeX = sizeY * 0.52
+      local color = ESPSettings.Rainbow and Color3.fromHSV(tick() % 5 / 5, 1, 1) or getTeamColor(getPlayerTeam(player))
+      local boxLeft = headPos.X - sizeX * 0.5
+      local boxTop = headPos.Y
+      local boxRight = headPos.X + sizeX * 0.5
+      local boxBottom = headPos.Y + sizeY
+      drawings.Box.Visible = ESPSettings.Enabled
+      if ESPSettings.Enabled then
+         drawings.Box.Size = Vector2.new(sizeX, sizeY)
+         drawings.Box.Position = Vector2.new(boxLeft, boxTop)
+         drawings.Box.Color = color
+      end
+      drawings.BoxOutline.Visible = ESPSettings.Enabled and ESPSettings.ImprovedVisuals
+      if drawings.BoxOutline.Visible then
+         drawings.BoxOutline.Size = Vector2.new(sizeX + 4, sizeY + 4)
+         drawings.BoxOutline.Position = Vector2.new(boxLeft - 2, boxTop - 2)
+      end
+      drawings.Tracer.Visible = ESPSettings.Tracers
+      if ESPSettings.Tracers then
+         drawings.Tracer.From = Vector2.new(Camera.ViewportSize.X * 0.5, Camera.ViewportSize.Y * 0.98)
+         drawings.Tracer.To = Vector2.new(rootPos2D.X, rootPos2D.Y)
+         drawings.Tracer.Color = color
+      end
+      drawings.Name.Visible = ESPSettings.Names
+      if ESPSettings.Names then
+         drawings.Name.Text = player.Name
+         drawings.Name.Position = Vector2.new(headPos.X, boxTop - 24)
+         drawings.Name.Color = color
+      end
+      drawings.Distance.Visible = ESPSettings.Distance
+      if ESPSettings.Distance then
+         local dist = math.floor((LocalPlayer.Character.HumanoidRootPart.Position - root.Position).Magnitude)
+         drawings.Distance.Text = dist .. "m"
+         drawings.Distance.Position = Vector2.new(boxRight + 32, boxTop + sizeY * 0.5)
+      end
+      drawings.Team.Visible = ESPSettings.TeamNames
+      if ESPSettings.TeamNames then
+         local team = getPlayerTeam(player)
+         drawings.Team.Text = team
+         drawings.Team.Position = Vector2.new(headPos.X, boxTop - 38)
+         drawings.Team.Color = getTeamColor(team)
+      end
+      if ESPSettings.HealthBars then
+         local healthPct = math.clamp(hum.Health / hum.MaxHealth, 0, 1)
+         local barHeight = sizeY * healthPct
+         drawings.HealthOuter.Visible = true
+         drawings.HealthOuter.From = Vector2.new(boxLeft - 14, boxTop)
+         drawings.HealthOuter.To = Vector2.new(boxLeft - 14, boxBottom)
+         drawings.HealthInner.Visible = true
+         drawings.HealthInner.From = Vector2.new(boxLeft - 14, boxBottom - barHeight)
+         drawings.HealthInner.To = Vector2.new(boxLeft - 14, boxBottom)
+         drawings.HealthInner.Color = Color3.fromHSV(healthPct * 0.3, 1.0, 1.0)
+      else
+         drawings.HealthOuter.Visible = false
+         drawings.HealthInner.Visible = false
+      end
+   end
+end
+
+local function getRootPart(char)
+   if not char then return nil end
+   local root = char:FindFirstChild("HumanoidRootPart")
+   if root then return root end
+   task.wait(0.15)
+   return char:FindFirstChild("HumanoidRootPart")
+end
+
+local function isValidHitboxModel(model)
+   if not model or not model.Parent then return false end
+   local hum = model:FindFirstChildOfClass("Humanoid")
+   if not hum or hum.Health <= 0 then return false end
+   local root = model:FindFirstChild("HumanoidRootPart")
+   if not root then return false end
+   if model == LocalPlayer.Character then return false end
+   return true
+end
+
+local function updateHitboxes()
+   if not HitboxSettings.Enabled then return end
+   
+   local currentModels = {}
+   for model in pairs(HitboxVisuals) do
+      table.insert(currentModels, model)
+   end
+   
+   for _, model in ipairs(currentModels) do
+      pcall(function()
+         local data = HitboxVisuals[model]
+         if not data then 
+            HitboxVisuals[model] = nil
+            return 
+         end
+
+         if not model or not model.Parent then
+            if data.VisualPart then data.VisualPart:Destroy() end
+            HitboxVisuals[model] = nil
+            return
+         end
+
+         local hum = model:FindFirstChildOfClass("Humanoid")
+         if not hum or hum.Health <= 0 then
+            cleanupHitbox(model)
+            return
+         end
+
+         if not isValidHitboxModel(model) then
+            cleanupHitbox(model)
+            return
+         end
+
+         local root = getRootPart(model)
+         if not root then
+            cleanupHitbox(model)
+            return
+         end
+
+         root.Size = data.OriginalSize * HitboxSettings.SizeMultiplier
+         root.Transparency = 1
+         root.CanCollide = false
+
+         if data.VisualPart and data.VisualPart.Parent then
+            data.VisualPart.Size = root.Size
+            data.VisualPart.CFrame = root.CFrame
+            data.VisualPart.Transparency = HitboxSettings.VisualTransparency
+            data.VisualPart.Color = HitboxSettings.VisualColor
+            data.VisualPart.Material = Enum.Material.Neon
+         end
+      end)
+   end
+end
+
+local function createHitboxVisual(model)
+   if not model or HitboxVisuals[model] or not isValidHitboxModel(model) then return end
+   
+   local root = getRootPart(model)
+   if not root then return end
+   
+   local originalSize = root.Size
+   local visual = Instance.new("Part")
+   visual.Name = "HitboxVisual"
+   visual.Anchored = true
+   visual.CanCollide = false
+   visual.Transparency = HitboxSettings.VisualTransparency
+   visual.Color = HitboxSettings.VisualColor
+   visual.Material = Enum.Material.Neon
+   visual.Shape = HitboxSettings.Shape
+   visual.Parent = workspace
+   
+   HitboxVisuals[model] = {
+      OriginalSize = originalSize,
+      VisualPart = visual
+   }
+   
+   local hum = model:FindFirstChildOfClass("Humanoid")
+   if hum then
+      local connName = "Died_" .. tostring(model)
+      if Connections[connName] then Connections[connName]:Disconnect() end
+      Connections[connName] = hum.Died:Connect(function()
+         cleanupHitbox(model)
+      end)
+   end
+end
+
+local function cleanupHitbox(model)
+   if not model then return end
+   if HitboxVisuals[model] then
+      if HitboxVisuals[model].VisualPart then
+         pcall(function() HitboxVisuals[model].VisualPart:Destroy() end)
+      end
+      HitboxVisuals[model] = nil
+   end
+   if model.Parent then
+      local root = getRootPart(model)
+      if root then
+         pcall(function()
+            root.Size = Vector3.new(2, 2, 1)
+            root.Transparency = 0
+            root.CanCollide = true
+         end)
+      end
+   end
+   local connName = "Died_" .. tostring(model)
+   if Connections[connName] then
+      Connections[connName]:Disconnect()
+      Connections[connName] = nil
+   end
+end
+
+local function clearAllHitboxes()
+   for model in pairs(HitboxVisuals) do
+      cleanupHitbox(model)
+   end
+end
+
+local function toggleFullbright(state)
+   if state then
+      Lighting.Brightness = 2
+      Lighting.GlobalShadows = false
+      Lighting.FogEnd = 9e9
+      for _, v in pairs(Lighting:GetDescendants()) do
+         if v:IsA("BloomEffect") or v:IsA("SunRaysEffect") or v:IsA("ColorCorrectionEffect") then
+            v.Enabled = false
+         end
+      end
+   else
+      Lighting.Brightness = 1
+      Lighting.GlobalShadows = true
+      Lighting.FogEnd = 100000
+   end
+end
+
+local function rejoinServer()
+   if #Players:GetPlayers() <= 1 then return end
+   TeleportService:Teleport(game.PlaceId, LocalPlayer)
+end
+
+local function serverHop()
+   local success, servers = pcall(function()
+      return game.HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Asc&limit=100"))
+   end)
+   if success and servers and servers.data then
+      for _, v in ipairs(servers.data) do
+         if v.playing < v.maxPlayers and v.id ~= game.JobId then
+            TeleportService:TeleportToPlaceInstance(game.PlaceId, v.id)
+            break
+         end
+      end
+   end
+end
+
+local function toggleAntiAFK(state)
+   if state then
+      Connections.AntiAFK = game:GetService("VirtualUser"):CaptureController()
+   else
+      if Connections.AntiAFK then Connections.AntiAFK:Disconnect() end
+   end
+end
+
+local function checkForStaff()
+   if not MiscSettings.AntiModerator then return end
+   for _, player in ipairs(Players:GetPlayers()) do
+      if player ~= LocalPlayer and isStaff(player.UserId) then
+         LocalPlayer:Kick("Staff detected in server")
+         return
+      end
+   end
+end
+
+Players.PlayerAdded:Connect(function(plr)
+   if MiscSettings.AntiModerator and isStaff(plr.UserId) then
+      LocalPlayer:Kick("Staff detected in server")
+   end
+   plr.CharacterAdded:Connect(function(char)
+      task.wait(0.3)
+      createESP(plr)
+      if HitboxSettings.Enabled then
+         createHitboxVisual(char)
+      end
+   end)
+end)
+
+task.spawn(function()
+   task.wait(1)
+   for _, player in ipairs(Players:GetPlayers()) do
+      if player ~= LocalPlayer then
+         createESP(player)
+         if player.Character then
+            createHitboxVisual(player.Character)
+         end
+         player.CharacterAdded:Connect(function(char)
+            task.wait(0.3)
+            createESP(player)
+            if HitboxSettings.Enabled then
+               createHitboxVisual(char)
+            end
+         end)
+      end
+   end
+   for _, model in ipairs(workspace:GetDescendants()) do
+      if isValidHitboxModel(model) then
+         task.spawn(createHitboxVisual, model)
+      end
+   end
+   
+   -- Inicializamos el único crosshair (círculo relleno)
+   dotCrosshair.Center.Radius = CrosshairSettings.Size / 2
+   dotCrosshair.Center.Thickness = CrosshairSettings.Thickness
+   dotCrosshair.Center.Color = CrosshairSettings.Color
+   dotCrosshair.Center.Transparency = CrosshairSettings.Transparency
+   dotCrosshair.Center.Filled = true
+   dotCrosshair.Center.NumSides = 100
+end)
+
+Connections.Render = RunService.RenderStepped:Connect(function()
+   pcall(function()
+      updateVisuals()
+      updateHitboxes()
+      
+      -- Actualización simple del crosshair punto relleno
+      if CrosshairSettings.Enabled then
+         dotCrosshair.Center.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+         dotCrosshair.Center.Radius = CrosshairSettings.Size / 2
+         dotCrosshair.Center.Thickness = CrosshairSettings.Thickness
+         dotCrosshair.Center.Color = CrosshairSettings.Color
+         dotCrosshair.Center.Transparency = CrosshairSettings.Transparency
+         dotCrosshair.Center.Visible = true
+         
+         if CrosshairSettings.Outline then
+            if not dotCrosshair.Outline then
+               dotCrosshair.Outline = Drawing.new("Circle")
+               dotCrosshair.Outline.Filled = false
+               dotCrosshair.Outline.Transparency = 0.6
+            end
+            dotCrosshair.Outline.Position = dotCrosshair.Center.Position
+            dotCrosshair.Outline.Radius = dotCrosshair.Center.Radius + CrosshairSettings.OutlineThickness
+            dotCrosshair.Outline.Thickness = CrosshairSettings.OutlineThickness + 1
+            dotCrosshair.Outline.Color = CrosshairSettings.OutlineColor
+            dotCrosshair.Outline.Visible = true
+         elseif dotCrosshair.Outline then
+            dotCrosshair.Outline.Visible = false
+         end
+      else
+         dotCrosshair.Center.Visible = false
+         if dotCrosshair.Outline then dotCrosshair.Outline.Visible = false end
+      end
+      
+      checkForStaff()
+   end)
+end)
+
+Connections.Character = LocalPlayer.CharacterAdded:Connect(function()
+   task.wait(0.6)
+   for _, obj in pairs(ESP_Objects) do
+      for _, d in pairs(obj) do pcall(function() d:Remove() end) end
+   end
+   table.clear(ESP_Objects)
+   clearAllHitboxes()
+   task.wait(0.3)
+   for _, player in ipairs(Players:GetPlayers()) do
+      if player ~= LocalPlayer then
+         createESP(player)
+      end
+   end
+   for _, model in ipairs(workspace:GetDescendants()) do
+      if isValidHitboxModel(model) then
+         task.spawn(createHitboxVisual, model)
+      end
+   end
+   updateVisuals()
+end)
+
+task.spawn(function()
+   local gui
+   for i = 1, 30 do
+      gui = game.CoreGui:FindFirstChildWhichIsA("ScreenGui", true)
+      if gui and (gui.Name == "Rayfield" or gui:FindFirstChild("Main")) then break end
+      task.wait(0.1)
+   end
+   if gui then
+      gui.AncestryChanged:Connect(function(_, parent)
+         if not parent then
+            for _, obj in pairs(ESP_Objects) do
+               for _, d in pairs(obj) do pcall(function() d:Remove() end) end
+            end
+            table.clear(ESP_Objects)
+            clearAllHitboxes()
+            for _, c in pairs(Connections) do pcall(function() c:Disconnect() end) end
+         end
+      end)
+   end
+end)
+
+ESPTab:CreateSection("ESP Controls")
+ESPTab:CreateParagraph({Title = "Visual enhancements for players - improved contrast & outlines", Content = ""})
+
+ESPTab:CreateToggle({
+   Name = "Enable ESP",
+   CurrentValue = false,
+   Callback = function(Value)
+      ESPSettings.Enabled = Value
+   end,
+})
+
+ESPTab:CreateToggle({
+   Name = "Only My Team ESP",
+   CurrentValue = false,
+   Callback = function(Value)
+      ESPSettings.OnlyMyTeam = Value
+   end,
+})
+
+ESPTab:CreateToggle({
+   Name = "Health Bars",
+   CurrentValue = false,
+   Callback = function(Value)
+      ESPSettings.HealthBars = Value
+   end,
+})
+
+ESPTab:CreateToggle({
+   Name = "Tracers",
+   CurrentValue = false,
+   Callback = function(Value)
+      ESPSettings.Tracers = Value
+   end,
+})
+
+ESPTab:CreateToggle({
+   Name = "Player Names",
+   CurrentValue = false,
+   Callback = function(Value)
+      ESPSettings.Names = Value
+   end,
+})
+
+ESPTab:CreateToggle({
+   Name = "Distance (meters)",
+   CurrentValue = false,
+   Callback = function(Value)
+      ESPSettings.Distance = Value
+   end,
+})
+
+ESPTab:CreateToggle({
+   Name = "Team Names",
+   CurrentValue = false,
+   Callback = function(Value)
+      ESPSettings.TeamNames = Value
+   end,
+})
+
+ESPTab:CreateToggle({
+   Name = "Rainbow Mode",
+   CurrentValue = false,
+   Callback = function(Value)
+      ESPSettings.Rainbow = Value
+   end,
+})
+
+ESPTab:CreateToggle({
+   Name = "Improved Visuals (Outline + Contrast)",
+   CurrentValue = true,
+   Callback = function(Value)
+      ESPSettings.ImprovedVisuals = Value
+   end,
+})
+
+HitboxTab:CreateSection("Hitbox Expander")
+HitboxTab:CreateParagraph({Title = "Makes hitboxes bigger - works on NPCs/monsters too - visual neon part shows real size", Content = ""})
+
+HitboxTab:CreateToggle({
+   Name = "Enable Hitbox Expander",
+   CurrentValue = false,
+   Callback = function(Value)
+      HitboxSettings.Enabled = Value
+      clearAllHitboxes()
+      task.wait(0.1)
+      if Value then
+         for _, model in ipairs(workspace:GetDescendants()) do
+            task.spawn(createHitboxVisual, model)
+         end
+      end
+   end,
+})
+
+HitboxTab:CreateSlider({
+   Name = "Size Multiplier",
+   Range = {1, 25},
+   Increment = 0.25,
+   Suffix = "x",
+   CurrentValue = 6,
+   Callback = function(Value)
+      HitboxSettings.SizeMultiplier = Value
+   end,
+})
+
+HitboxTab:CreateSlider({
+   Name = "Visual Transparency",
+   Range = {0, 1},
+   Increment = 0.02,
+   Suffix = "",
+   CurrentValue = 0.68,
+   Callback = function(Value)
+      HitboxSettings.VisualTransparency = Value
+   end,
+})
+
+CrosshairTab:CreateSection("Crosshair Settings")
+
+CrosshairTab:CreateToggle({
+   Name = "Enable Crosshair",
+   CurrentValue = false,
+   Callback = function(Value)
+      CrosshairSettings.Enabled = Value
+      UpdateCrosshairVisibility(Value)
+   end,
+})
+
+CrosshairTab:CreateSlider({
+   Name = "Size",
+   Range = {4, 30},
+   Increment = 1,
+   Suffix = "px",
+   CurrentValue = 12,
+   Callback = function(Value)
+      CrosshairSettings.Size = Value
+   end,
+})
+
+CrosshairTab:CreateSlider({
+   Name = "Thickness",
+   Range = {0.5, 3},
+   Increment = 0.1,
+   Suffix = "",
+   CurrentValue = 1,
+   Callback = function(Value)
+      CrosshairSettings.Thickness = Value
+   end,
+})
+
+CrosshairTab:CreateColorPicker({
+   Name = "Color",
+   Color = Color3.fromRGB(255,80,80),
+   Callback = function(Value)
+      CrosshairSettings.Color = Value
+   end,
+})
+
+CrosshairTab:CreateSlider({
+   Name = "Transparency",
+   Range = {0, 1},
+   Increment = 0.05,
+   Suffix = "",
+   CurrentValue = 1,
+   Callback = function(Value)
+      CrosshairSettings.Transparency = Value
+   end,
+})
+
+CrosshairTab:CreateToggle({
+   Name = "Black Outline",
+   CurrentValue = true,
+   Callback = function(Value)
+      CrosshairSettings.Outline = Value
+   end,
+})
+
+MiscTab:CreateSection("Miscellaneous Features")
+MiscTab:CreateParagraph({Title = "Quality of life features - no risk of detection", Content = ""})
+
+MiscTab:CreateToggle({
+   Name = "Fullbright",
+   CurrentValue = false,
+   Callback = toggleFullbright,
+})
+
+MiscTab:CreateButton({
+   Name = "Rejoin Server",
+   Callback = rejoinServer,
+})
+
+MiscTab:CreateButton({
+   Name = "Server Hop",
+   Callback = serverHop,
+})
+
+MiscTab:CreateToggle({
+   Name = "Anti-AFK",
+   CurrentValue = false,
+   Callback = toggleAntiAFK,
+})
+
+MiscTab:CreateToggle({
+   Name = "Anti-Moderator (auto-kick on staff)",
+   CurrentValue = false,
+   Callback = function(Value)
+      MiscSettings.AntiModerator = Value
+   end,
+})
+
+Rayfield:Notify({
+   Title = "Script Loaded",
+   Content = "Hitbox simple y estable | Crosshair reducido a un punto relleno limpio",
+   Duration = 6
+})

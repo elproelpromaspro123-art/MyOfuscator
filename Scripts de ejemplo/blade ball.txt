@@ -1,0 +1,393 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local StarterGui = game:GetService("StarterGui")
+local TweenService = game:GetService("TweenService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+
+local Player = Players.LocalPlayer
+local PlayerGui = Player:WaitForChild("PlayerGui")
+
+local AntiParryEnabled = true
+local VisualizerEnabled = true
+local BallConnections = {}
+local ActiveBalls = {}
+local LastParryTime = 0
+local COOLDOWN = 0.025
+local DEBUG_MODE = false
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "AUTOPARRY_BETA_V1"
+ScreenGui.Parent = PlayerGui
+ScreenGui.ResetOnSpawn = false
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 320, 0, 220)
+MainFrame.Position = UDim2.new(0, 20, 0, 20)
+MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+MainFrame.BorderSizePixel = 0
+MainFrame.Parent = ScreenGui
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 15)
+UICorner.Parent = MainFrame
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 60)
+Title.BackgroundTransparency = 1
+Title.Text = "⚡ AUTOPARRY BETA V1"
+Title.TextColor3 = Color3.fromRGB(0, 255, 150)
+Title.TextScaled = true
+Title.Font = Enum.Font.GothamBold
+Title.Parent = MainFrame
+
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.Size = UDim2.new(1, -20, 0, 35)
+StatusLabel.Position = UDim2.new(0, 10, 0, 65)
+StatusLabel.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+StatusLabel.BorderSizePixel = 0
+StatusLabel.Text = "🔍 Initializing..."
+StatusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+StatusLabel.TextScaled = true
+StatusLabel.Font = Enum.Font.Gotham
+StatusLabel.Parent = MainFrame
+
+local StatusCorner = Instance.new("UICorner")
+StatusCorner.CornerRadius = UDim.new(0, 8)
+StatusCorner.Parent = StatusLabel
+
+local ToggleBtn = Instance.new("TextButton")
+ToggleBtn.Size = UDim2.new(0.48, -8, 0, 40)
+ToggleBtn.Position = UDim2.new(0, 10, 0, 110)
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
+ToggleBtn.BorderSizePixel = 0
+ToggleBtn.Text = "🛡️ AUTO PARRY: ON"
+ToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleBtn.TextScaled = true
+ToggleBtn.Font = Enum.Font.GothamBold
+ToggleBtn.Parent = MainFrame
+
+local ToggleCorner = Instance.new("UICorner")
+ToggleCorner.CornerRadius = UDim.new(0, 10)
+ToggleCorner.Parent = ToggleBtn
+
+local VisBtn = Instance.new("TextButton")
+VisBtn.Size = UDim2.new(0.48, -8, 0, 40)
+VisBtn.Position = UDim2.new(0.52, 0, 0, 110)
+VisBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+VisBtn.BorderSizePixel = 0
+VisBtn.Text = "👁️ HITBOX VIS: ON"
+VisBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+VisBtn.TextScaled = true
+VisBtn.Font = Enum.Font.GothamBold
+VisBtn.Parent = MainFrame
+
+local VisCorner = Instance.new("UICorner")
+VisCorner.CornerRadius = UDim.new(0, 10)
+VisCorner.Parent = VisBtn
+
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.new(1, -20, 0, 40)
+CloseBtn.Position = UDim2.new(0, 10, 0, 165)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+CloseBtn.BorderSizePixel = 0
+CloseBtn.Text = "❌ CLOSE ALL"
+CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseBtn.TextScaled = true
+CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.Parent = MainFrame
+
+local CloseCorner = Instance.new("UICorner")
+CloseCorner.CornerRadius = UDim.new(0, 10)
+CloseCorner.Parent = CloseBtn
+
+local Stroke = Instance.new("UIStroke")
+Stroke.Color = Color3.fromRGB(0, 255, 150)
+Stroke.Thickness = 3
+Stroke.Parent = MainFrame
+
+local function IsRealBall(Ball)
+    if not Ball or not Ball:IsA("BasePart") then
+        return false
+    end
+    local realBallAttr = Ball:GetAttribute("realBall")
+    local targetAttr = Ball:GetAttribute("target")
+    return realBallAttr == true and targetAttr ~= nil and targetAttr ~= ""
+end
+
+local function GetRealBall()
+    local ballsFolder = workspace:FindFirstChild("Balls")
+    if not ballsFolder then return nil end
+    for _, Ball in pairs(ballsFolder:GetChildren()) do
+        if IsRealBall(Ball) then
+            return Ball
+        end
+    end
+    return nil
+end
+
+local function GetBallVelocity(Ball)
+    if not Ball then
+        return 80
+    end
+    local zoomies = Ball:FindFirstChild("zoomies") or Ball:FindFirstChild("zoomes")
+    if zoomies then
+        local success, vectorVelocity = pcall(function()
+            return zoomies.VectorVelocity
+        end)
+        if success and vectorVelocity and typeof(vectorVelocity) == "Vector3" then
+            return vectorVelocity.Magnitude
+        end
+        local success2, x = pcall(function() return zoomies.X end)
+        local success3, y = pcall(function() return zoomies.Y end)
+        local success4, z = pcall(function() return zoomies.Z end)
+        if success2 and success3 and success4 then
+            return Vector3.new(x, y, z).Magnitude
+        end
+    end
+    if ActiveBalls[Ball] and ActiveBalls[Ball].lastPosition then
+        local currentPos = Ball.Position
+        local lastPos = ActiveBalls[Ball].lastPosition
+        local timePassed = tick() - (ActiveBalls[Ball].lastUpdate or tick())
+        if timePassed > 0.01 then
+            local calculatedSpeed = (currentPos - lastPos).Magnitude / timePassed
+            if calculatedSpeed > 5 then
+                return calculatedSpeed
+            end
+        end
+    end
+    local vectorAttr = Ball:GetAttribute("VectorVelocity")
+    if vectorAttr and typeof(vectorAttr) == "Vector3" then
+        return vectorAttr.Magnitude
+    end
+    return 80
+end
+
+local HitboxVisualizers = {}
+local function CreateHitboxVisualizer(Ball)
+    if HitboxVisualizers[Ball] then return end
+    local Billboard = Instance.new("BillboardGui")
+    Billboard.Name = "ParryHitbox"
+    Billboard.Size = UDim2.new(0, 350, 0, 350)
+    Billboard.StudsOffset = Vector3.new(0, 2.5, 0)
+    Billboard.Adornee = Ball
+    Billboard.Parent = Ball
+    Billboard.AlwaysOnTop = true
+    Billboard.Enabled = false
+
+    local OuterRing = Instance.new("Frame")
+    OuterRing.Size = UDim2.new(2.2, 0, 2.2, 0)
+    OuterRing.Position = UDim2.new(-0.6, 0, -0.6, 0)
+    OuterRing.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+    OuterRing.BackgroundTransparency = 0.7
+    OuterRing.BorderSizePixel = 0
+    OuterRing.Parent = Billboard
+
+    local OuterCorner = Instance.new("UICorner")
+    OuterCorner.CornerRadius = UDim.new(1, 0)
+    OuterCorner.Parent = OuterRing
+
+    local MiddleRing = Instance.new("Frame")
+    MiddleRing.Size = UDim2.new(1.6, 0, 1.6, 0)
+    MiddleRing.Position = UDim2.new(-0.3, 0, -0.3, 0)
+    MiddleRing.BackgroundColor3 = Color3.fromRGB(255, 200, 0)
+    MiddleRing.BackgroundTransparency = 0.6
+    MiddleRing.BorderSizePixel = 0
+    MiddleRing.Parent = Billboard
+
+    local MiddleCorner = Instance.new("UICorner")
+    MiddleCorner.CornerRadius = UDim.new(1, 0)
+    MiddleCorner.Parent = MiddleRing
+
+    local InnerRing = Instance.new("Frame")
+    InnerRing.Size = UDim2.new(1.2, 0, 1.2, 0)
+    InnerRing.Position = UDim2.new(-0.1, 0, -0.1, 0)
+    InnerRing.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+    InnerRing.BackgroundTransparency = 0.5
+    InnerRing.BorderSizePixel = 0
+    InnerRing.Parent = Billboard
+
+    local InnerCorner = Instance.new("UICorner")
+    InnerCorner.CornerRadius = UDim.new(1, 0)
+    InnerCorner.Parent = InnerRing
+
+    HitboxVisualizers[Ball] = Billboard
+end
+
+local function PerfectParry(Ball)
+    if not AntiParryEnabled then return end
+    if tick() - LastParryTime < COOLDOWN then return end
+    for i = 1, 2 do
+        VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+        task.wait(0.01)
+        VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+        if i == 1 then task.wait(0.005) end
+    end
+    LastParryTime = tick()
+    StatusLabel.Text = "⚡ PERFECT PARRY!"
+    StatusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+    task.spawn(function()
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(255, 200, 0)
+        task.wait(0.25)
+        if AntiParryEnabled then
+            ToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
+        else
+            ToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+        end
+    end)
+end
+
+local HeartbeatConnection = RunService.Heartbeat:Connect(function()
+    local deadFolder = workspace:FindFirstChild("Dead")
+    if deadFolder and deadFolder:FindFirstChild(Player.Name) then
+        StatusLabel.Text = "💀 Esperando respawn..."
+        StatusLabel.TextColor3 = Color3.fromRGB(255, 150, 150)
+        return
+    end
+
+    local Character = Player.Character
+    if not Character or not Character:FindFirstChild("HumanoidRootPart") then
+        StatusLabel.Text = "⚠️ Character not found"
+        StatusLabel.TextColor3 = Color3.fromRGB(255, 150, 150)
+        return
+    end
+
+    local HRP = Character.HumanoidRootPart
+    local RealBall = GetRealBall()
+
+    if RealBall then
+        if not ActiveBalls[RealBall] then
+            ActiveBalls[RealBall] = {
+                lastPosition = RealBall.Position,
+                lastUpdate = tick()
+            }
+        else
+            ActiveBalls[RealBall].lastPosition = RealBall.Position
+            ActiveBalls[RealBall].lastUpdate = tick()
+        end
+
+        local target = RealBall:GetAttribute("target")
+
+        if target == Player.Name then
+            local Distance = (RealBall.Position - HRP.Position).Magnitude
+            local Speed = GetBallVelocity(RealBall)
+
+            if VisualizerEnabled then
+                if not HitboxVisualizers[RealBall] then
+                    CreateHitboxVisualizer(RealBall)
+                end
+                HitboxVisualizers[RealBall].Enabled = true
+            end
+
+            local TimeToHit = 0
+            if Speed > 0 then
+                TimeToHit = Distance / Speed
+
+                local isCriticalDistance = (Distance >= 15 and Distance <= 70)
+                local isVeryClose = (Distance >= 10 and Distance <= 40)
+                local isGoodTiming = (TimeToHit >= 0.25 and TimeToHit <= 0.65)
+                local isHighSpeed = (Speed > 100)
+                local isExtremeSpeed = (Speed > 140)
+
+                if isExtremeSpeed and Distance <= 80 then
+                    PerfectParry(RealBall)
+                elseif isVeryClose then
+                    PerfectParry(RealBall)
+                elseif isCriticalDistance and isGoodTiming then
+                    PerfectParry(RealBall)
+                elseif isHighSpeed and Distance <= 65 then
+                    PerfectParry(RealBall)
+                end
+
+                StatusLabel.Text = string.format("🎯 %.1f studs | %.0f/s | T:%.2fs", Distance, Speed, TimeToHit)
+
+                if Distance < 30 then
+                    StatusLabel.TextColor3 = Color3.fromRGB(255, 50, 50)
+                elseif Distance < 50 then
+                    StatusLabel.TextColor3 = Color3.fromRGB(255, 150, 50)
+                else
+                    StatusLabel.TextColor3 = Color3.fromRGB(0, 255, 150)
+                end
+            else
+                if Distance <= 55 then
+                    PerfectParry(RealBall)
+                end
+                StatusLabel.Text = string.format("🎯 Dist: %.1f | Vel: ??", Distance)
+                StatusLabel.TextColor3 = Color3.fromRGB(255, 150, 50)
+            end
+        elseif target and target ~= "" then
+            StatusLabel.Text = "🎯 Target: " .. tostring(target)
+            StatusLabel.TextColor3 = Color3.fromRGB(255, 150, 50)
+            if VisualizerEnabled and HitboxVisualizers[RealBall] then
+                HitboxVisualizers[RealBall].Enabled = false
+            end
+        else
+            StatusLabel.Text = "🎯 Ball without target"
+            StatusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+        end
+    else
+        StatusLabel.Text = "🔍 Searching real ball..."
+        StatusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+    end
+end)
+
+task.spawn(function()
+    while task.wait(2) do
+        for Ball, data in pairs(ActiveBalls) do
+            if not Ball.Parent or not IsRealBall(Ball) then
+                ActiveBalls[Ball] = nil
+                if HitboxVisualizers[Ball] then
+                    pcall(function()
+                        HitboxVisualizers[Ball]:Destroy()
+                    end)
+                    HitboxVisualizers[Ball] = nil
+                end
+            end
+        end
+    end
+end)
+
+ToggleBtn.MouseButton1Click:Connect(function()
+    AntiParryEnabled = not AntiParryEnabled
+    ToggleBtn.Text = AntiParryEnabled and "🛡️ AUTO PARRY: ON" or "🛡️ AUTO PARRY: OFF"
+    ToggleBtn.BackgroundColor3 = AntiParryEnabled and Color3.fromRGB(0, 200, 0) or Color3.fromRGB(200, 0, 0)
+    StatusLabel.Text = AntiParryEnabled and "✅ AutoParry ENABLED" or "❌ AutoParry DISABLED"
+    StatusLabel.TextColor3 = AntiParryEnabled and Color3.fromRGB(0, 255, 150) or Color3.fromRGB(255, 100, 100)
+end)
+
+VisBtn.MouseButton1Click:Connect(function()
+    VisualizerEnabled = not VisualizerEnabled
+    VisBtn.Text = VisualizerEnabled and "👁️ HITBOX VIS: ON" or "👁️ HITBOX VIS: OFF"
+    VisBtn.BackgroundColor3 = VisualizerEnabled and Color3.fromRGB(0, 150, 255) or Color3.fromRGB(100, 100, 100)
+    if not VisualizerEnabled then
+        for Ball, Vis in pairs(HitboxVisualizers) do
+            if Vis then pcall(function() Vis:Destroy() end) end
+        end
+        HitboxVisualizers = {}
+    end
+end)
+
+CloseBtn.MouseButton1Click:Connect(function()
+    local ExitTween = TweenService:Create(MainFrame, TweenInfo.new(0.4, Enum.EasingStyle.Back), {
+        Position = UDim2.new(0, -350, 0, 20)
+    })
+    ExitTween:Play()
+    ExitTween.Completed:Connect(function()
+        ScreenGui:Destroy()
+        if HeartbeatConnection then HeartbeatConnection:Disconnect() end
+        for _, Conn in pairs(BallConnections) do
+            pcall(function() Conn:Disconnect() end)
+        end
+    end)
+end)
+
+StarterGui:SetCore("SendNotification", {
+    Title = "⚡ AUTOPARRY BETA V1",
+    Text = "Loaded!",
+    Duration = 6,
+})
+
+MainFrame.Position = UDim2.new(0, -350, 0, 20)
+local EnterTween = TweenService:Create(MainFrame, TweenInfo.new(0.6, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+    Position = UDim2.new(0, 20, 0, 20)
+})
+EnterTween:Play()

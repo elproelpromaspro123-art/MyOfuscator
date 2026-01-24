@@ -5,8 +5,7 @@ import dynamic from 'next/dynamic'
 import Header from '@/components/Header'
 import Footer from '@/components/Footer'
 import StatsPanel from '@/components/StatsPanel'
-import AdvancedOptions from '@/components/AdvancedOptions'
-import { obfuscateCode, defaultOptions, type ObfuscationOptions, type ProtectionStats } from '@/lib/obfuscator'
+import { obfuscateCode } from '@/lib/obfuscator'
 
 const CodeEditor = dynamic(() => import('@/components/CodeEditor'), { 
   ssr: false,
@@ -34,7 +33,6 @@ interface Stats {
   originalSize: number
   obfuscatedSize: number
   processingTime: number
-  protections?: ProtectionStats
 }
 
 export default function Home() {
@@ -43,7 +41,6 @@ export default function Home() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [stats, setStats] = useState<Stats | null>(null)
-  const [options, setOptions] = useState<ObfuscationOptions>(defaultOptions)
   const [copied, setCopied] = useState(false)
 
   const handleObfuscate = useCallback(async () => {
@@ -56,13 +53,12 @@ export default function Home() {
     setCopied(false)
     const start = performance.now()
     try {
-      const result = await obfuscateCode(input, options)
+      const result = await obfuscateCode(input)
       setOutput(result.code)
       setStats({
         originalSize: result.stats.originalSize,
         obfuscatedSize: result.stats.obfuscatedSize,
         processingTime: Math.round(performance.now() - start),
-        protections: result.stats.protections,
       })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'An error occurred during obfuscation')
@@ -70,7 +66,7 @@ export default function Home() {
     } finally {
       setLoading(false)
     }
-  }, [input, options])
+  }, [input])
 
   const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(output)
@@ -129,9 +125,6 @@ export default function Home() {
       {/* Main Editor Section */}
       <main className="container mx-auto px-4 pb-16 max-w-5xl">
         <div className="space-y-4">
-          {/* Advanced Options */}
-          <AdvancedOptions options={options} onChange={setOptions} />
-
           {/* Input Editor */}
           <div className="editor-wrapper">
             <div className="flex items-center justify-between px-5 py-4 border-b border-[#1f1f28]">
