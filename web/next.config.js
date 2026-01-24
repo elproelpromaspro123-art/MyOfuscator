@@ -9,6 +9,7 @@ const nextConfig = {
   },
   poweredByHeader: false,
   compress: true,
+  outputFileTracingRoot: process.cwd(),
   
   // Security headers
   async headers() {
